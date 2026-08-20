@@ -56,3 +56,16 @@ def test_floor_is_not_a_negotiation_target() -> None:
         last_buyer_offer_paise=None,
         last_counter_amount_paise=600_000,
     ) == "buyer_improvement_required"
+
+
+def test_repeat_or_worse_offer_holds_even_if_model_tries_non_price_wording() -> None:
+    policy = strategy()
+    clarify = AgentDecision(action="clarify", message="Model-generated wording")
+    assert validate_strategy(
+        policy,
+        clarify,
+        buyer_offer_paise=490_000,
+        best_buyer_offer_paise=510_000,
+        last_buyer_offer_paise=510_000,
+        last_counter_amount_paise=560_000,
+    ) == "buyer_offer_not_improved"

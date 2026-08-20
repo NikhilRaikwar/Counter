@@ -47,6 +47,11 @@ def validate_strategy(
         if buyer_offer_paise is not None and decision.proposed_amount_paise != buyer_offer_paise:
             return "accept_not_matching_buyer_offer"
         return None
+    if buyer_offer_paise is not None and last_buyer_offer_paise is not None:
+        if strategy.hold_on_repeat_offer and buyer_offer_paise == last_buyer_offer_paise:
+            return "buyer_offer_not_improved"
+        if strategy.hold_on_worse_offer and buyer_offer_paise < last_buyer_offer_paise:
+            return "buyer_offer_not_improved"
     if decision.action not in {AgentAction.COUNTER, AgentAction.OFFER_BUNDLE}:
         return None
 
@@ -61,8 +66,6 @@ def validate_strategy(
         return "concession_not_permitted"
     if buyer_offer_paise is None or best_buyer_offer_paise is None:
         return "buyer_improvement_required"
-    if last_buyer_offer_paise is not None and buyer_offer_paise <= last_buyer_offer_paise:
-        return "buyer_offer_not_improved"
     if buyer_offer_paise < best_buyer_offer_paise + strategy.min_buyer_improvement_paise:
         return "buyer_improvement_required"
     if current - decision.proposed_amount_paise > strategy.max_concession_per_round_paise:
