@@ -64,16 +64,22 @@ export function PolicyReviewCard() {
       },
       floorPricePaise: extracted.floor_price_paise ?? 0,
       maxDiscountPaise: extracted.max_discount_paise ?? 0,
-      concessionStrategy: extracted.concession_strategy ?? {
-        mode: "hold_firm",
-        opening_counter_paise: review.offer.list_price_paise,
-        min_buyer_improvement_paise: 0,
-        max_concession_per_round_paise: 0,
-        hold_on_repeat_offer: true,
-        hold_on_worse_offer: true,
-        accept_buyer_offer_if_authorized: true,
-        hold_at_floor: true,
-      },
+      concessionStrategy: extracted.concession_strategy
+        ? {
+            ...extracted.concession_strategy,
+            opening_counter_paise:
+              extracted.concession_strategy.opening_counter_paise ?? review.offer.list_price_paise,
+          }
+        : {
+            mode: "hold_firm",
+            opening_counter_paise: review.offer.list_price_paise,
+            min_buyer_improvement_paise: 0,
+            max_concession_per_round_paise: 0,
+            hold_on_repeat_offer: true,
+            hold_on_worse_offer: true,
+            accept_buyer_offer_if_authorized: true,
+            hold_at_floor: true,
+          },
     });
   }, []);
 
