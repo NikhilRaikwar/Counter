@@ -42,10 +42,12 @@ export function MerchantNavbar() {
             Docs
           </Link>
           <a
-            href="/#safety"
+            href="https://github.com/NikhilRaikwar/Counter"
+            target="_blank"
+            rel="noreferrer"
             className="hidden sm:inline-block text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
           >
-            Safety
+            GitHub
           </a>
           <Link
             to="/create"

@@ -29,17 +29,19 @@ export function DemoNavbar() {
           >
             Demo
           </Link>
-          <a
-            href="/#rules"
-            className="text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
-          >
-            Safety
-          </a>
-          <a
-            href="/#how-it-works"
+          <Link
+            to="/docs"
             className="text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
           >
             Docs
+          </Link>
+          <a
+            href="https://github.com/NikhilRaikwar/Counter"
+            target="_blank"
+            rel="noreferrer"
+            className="text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
+          >
+            GitHub
           </a>
           <Link
             to="/"

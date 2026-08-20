@@ -77,13 +77,7 @@ function DocsNavbar() {
             Interactive Demo
           </Link>
           <a
-            href="/#safety"
-            className="text-sm font-medium text-muted-foreground transition-colors hover:text-ink"
-          >
-            Safety
-          </a>
-          <a
-            href="https://github.com"
+            href="https://github.com/NikhilRaikwar/Counter"
             target="_blank"
             rel="noreferrer"
             className="hidden items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-ink sm:inline-flex"

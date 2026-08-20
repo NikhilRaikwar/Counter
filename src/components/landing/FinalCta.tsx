@@ -22,7 +22,7 @@ export function FinalCta() {
             Start a demo
           </a>
           <a
-            href="#docs"
+            href="/docs"
             className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-6 py-3 text-[0.95rem] font-semibold text-ink transition-colors hover:bg-muted"
           >
             Read the docs <ArrowRight className="size-4" />
@@ -43,7 +43,7 @@ export function SiteFooter() {
       <div className="flex flex-col items-center justify-between gap-4 border-t border-border pt-6 text-[0.82rem] text-muted-foreground sm:flex-row">
         <p>Counter — Autonomous deal check for merchants. © 2025</p>
         <div className="flex gap-8">
-          <a href="#docs" className="transition-colors hover:text-ink">
+          <a href="/docs" className="transition-colors hover:text-ink">
             Docs
           </a>
           <a href="#cta" className="transition-colors hover:text-ink">

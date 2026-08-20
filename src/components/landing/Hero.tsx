@@ -57,10 +57,10 @@ export function Hero() {
           Negotiate the deal <ArrowRight className="size-4" />
         </a>
         <a
-          href="#how-it-works"
+          href="/demo"
           className="inline-flex items-center rounded-xl border border-border bg-card px-6 py-3.5 text-[0.95rem] font-semibold text-ink transition-colors hover:bg-muted"
         >
-          Try inside buyer
+          Try as a buyer
         </a>
       </div>
 

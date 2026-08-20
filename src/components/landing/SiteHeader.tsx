@@ -1,8 +1,8 @@
 const NAV = [
-  { label: "How it works", href: "/#how-it-works" },
-  { label: "Safety", href: "/#safety" },
+  { label: "Product", href: "/#how-it-works" },
+  { label: "Demo", href: "/demo" },
   { label: "Docs", href: "/docs" },
-  { label: "GitHub", href: "https://github.com", external: true },
+  { label: "GitHub", href: "https://github.com/NikhilRaikwar/Counter", external: true },
 ];
 
 export function SiteHeader() {
