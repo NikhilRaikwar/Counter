@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     langsmith_api_key: SecretStr | None = Field(default=None, repr=False)
     langsmith_tracing: bool = False
     langsmith_project: str = "counter-dev"
+    demo_offer_seed_enabled: bool = False
 
     @field_validator("database_url")
     @classmethod

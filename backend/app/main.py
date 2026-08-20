@@ -60,6 +60,11 @@ def create_app(
             else ""
         )
         app.state.frontend_url = str(resolved.frontend_url).rstrip("/")
+        if resolved.demo_offer_seed_enabled:
+            from app.domain.offers.demo_seed import ensure_demo_offer
+
+            async with app.state.db_session_factory() as session:
+                await ensure_demo_offer(session)
         checkpoint_path = resolved.langgraph_checkpoint_path
         if checkpoint_path == "./counter_graph.db" and resolved.database_url.startswith(
             "sqlite+aiosqlite:///"

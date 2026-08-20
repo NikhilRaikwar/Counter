@@ -1,4 +1,5 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { useState } from "react";
 import {
   Sparkles,
   ArrowRight,
@@ -12,6 +13,8 @@ import {
 } from "lucide-react";
 import { DemoNavbar } from "@/components/demo/DemoNavbar";
 import { DEFAULT_OFFERS } from "@/lib/mock-service";
+import { counterApi } from "@/services/counter-api";
+import { saveDealCapability } from "@/services/capability-store";
 
 const title = "Interactive Product Demo — Counter";
 const description =
@@ -33,6 +36,25 @@ export const Route = createFileRoute("/demo/")({
 
 function DemoPage() {
   const exampleOffer = DEFAULT_OFFERS[1] || DEFAULT_OFFERS[0]; // Growth Sprint
+  const router = useRouter();
+  const [openingDemo, setOpeningDemo] = useState(false);
+  const [demoError, setDemoError] = useState<string | null>(null);
+
+  const openBuyerDemo = async () => {
+    setOpeningDemo(true);
+    setDemoError(null);
+    try {
+      // Resolve the canonical live offer, then create a normal, isolated buyer deal.
+      const offer = await counterApi.getPublicOffer("growth-sprint-demo");
+      const started = await counterApi.startDeal(offer.slug);
+      saveDealCapability(offer.slug, started.deal_capability);
+      await router.navigate({ to: "/d/$slug", params: { slug: offer.slug } });
+    } catch {
+      setDemoError("The live demo is temporarily unavailable. Please try again.");
+    } finally {
+      setOpeningDemo(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col font-sans">
@@ -111,14 +133,16 @@ function DemoPage() {
               </p>
             </div>
 
-            <Link
-              to="/d/$slug"
-              params={{ slug: exampleOffer.slug }}
+            <button
+              type="button"
+              onClick={openBuyerDemo}
+              disabled={openingDemo}
               className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-amber py-3.5 text-sm font-bold text-amber-foreground shadow-xs transition-transform hover:-translate-y-0.5 active:translate-y-0"
             >
-              <span>Open buyer link</span>
+              <span>{openingDemo ? "Opening buyer demo…" : "Open buyer demo"}</span>
               <ArrowRight className="size-4" />
-            </Link>
+            </button>
+            {demoError && <p className="mt-3 text-xs font-medium text-rose-700">{demoError}</p>}
           </div>
 
           {/* OPTION B: CREATE YOUR OWN DEAL */}
