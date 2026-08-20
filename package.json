@@ -1,6 +1,7 @@
 {
   "name": "counter",
   "private": true,
+  "packageManager": "bun@1.2.18",
   "sideEffects": false,
   "type": "module",
   "scripts": {

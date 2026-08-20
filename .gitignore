@@ -23,6 +23,8 @@ node_modules/
 dist/
 build/
 .tanstack/
+.output/
+.playwright-mcp/
 coverage/
 .coverage
 htmlcov/
