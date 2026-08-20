@@ -1,0 +1,1 @@
+"""Counter backend application."""

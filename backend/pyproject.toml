@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "counter-backend"
+version = "0.1.0"
+description = "Counter API and durable data foundation"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.141,<0.142",
+  "uvicorn[standard]>=0.35,<1",
+  "pydantic>=2.11,<3",
+  "pydantic-settings>=2.14,<3",
+  "sqlalchemy[asyncio]>=2.0.51,<2.1",
+  "aiosqlite>=0.21,<1",
+  "alembic>=1.18.5,<2",
+  "langchain-openai>=1.6,<1.7",
+  "langgraph>=1.2.11,<1.3",
+  "langgraph-checkpoint-sqlite>=3.1.1,<3.2",
+]
+
+[project.optional-dependencies]
+test = [
+  "httpx>=0.28,<1",
+  "pytest>=8,<10",
+  "pytest-asyncio>=1,<2",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-q"
