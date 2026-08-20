@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from datetime import datetime, timezone
+from urllib.parse import quote
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,9 +32,10 @@ def reference_id(identity: str) -> str:
 
 
 class PaymentService:
-    def __init__(self, session: AsyncSession, client: PaymentLinksClient) -> None:
+    def __init__(self, session: AsyncSession, client: PaymentLinksClient, frontend_url: str) -> None:
         self.session = session
         self.client = client
+        self.frontend_url = frontend_url.rstrip("/")
 
     async def _trusted_deal(self, capability: str | None) -> tuple[Deal, Offer, PolicyVersion]:
         if not capability:
@@ -115,6 +117,12 @@ class PaymentService:
                 "Checkout is being prepared; retry shortly",
                 409,
             )
+        if not offer.public_slug:
+            await self.session.rollback()
+            raise ApplicationError("payment_not_available", "Checkout is unavailable", 409)
+        callback_url = (
+            f"{self.frontend_url}/d/{quote(offer.public_slug, safe='')}?payment=return"
+        )
         execution = PaymentExecution(
             deal_id=deal.id,
             execution_identity=identity,
@@ -133,6 +141,8 @@ class PaymentService:
                 currency=execution.currency,
                 reference_id=execution.reference_id,
                 expire_by=int(expires_at.timestamp()),
+                callback_url=callback_url,
+                callback_method="get",
             )
         except RazorpayFailure as exc:
             await self.session.execute(text("BEGIN IMMEDIATE"))

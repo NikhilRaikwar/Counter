@@ -25,13 +25,15 @@ class RazorpayPaymentLink:
 
 class PaymentLinksClient(Protocol):
     async def create_standard_payment_link(
-        self, *, amount: int, currency: str, reference_id: str, expire_by: int
+        self, *, amount: int, currency: str, reference_id: str, expire_by: int,
+        callback_url: str, callback_method: str
     ) -> RazorpayPaymentLink: ...
 
 
 class UnconfiguredPaymentLinksClient:
     async def create_standard_payment_link(
-        self, *, amount: int, currency: str, reference_id: str, expire_by: int
+        self, *, amount: int, currency: str, reference_id: str, expire_by: int,
+        callback_url: str, callback_method: str
     ) -> RazorpayPaymentLink:
         raise RazorpayFailure("razorpay_not_configured")
 
@@ -44,7 +46,8 @@ class RazorpayPaymentLinksClient:
         self._timeout = timeout_seconds
 
     async def create_standard_payment_link(
-        self, *, amount: int, currency: str, reference_id: str, expire_by: int
+        self, *, amount: int, currency: str, reference_id: str, expire_by: int,
+        callback_url: str, callback_method: str
     ) -> RazorpayPaymentLink:
         payload: dict[str, Any] = {
             "amount": amount,
@@ -55,6 +58,8 @@ class RazorpayPaymentLinksClient:
             "expire_by": expire_by,
             "notify": {"sms": False, "email": False},
             "reminder_enable": False,
+            "callback_url": callback_url,
+            "callback_method": callback_method,
         }
         try:
             async with httpx.AsyncClient(

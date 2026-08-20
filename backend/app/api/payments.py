@@ -33,7 +33,9 @@ async def create_payment_link(
     request: Request,
     capability: DealCapability = None,
 ) -> PaymentLinkResponse:
-    return await PaymentService(session, payment_client(request)).create_link(capability)
+    return await PaymentService(
+        session, payment_client(request), request.app.state.frontend_url
+    ).create_link(capability)
 
 
 @router.get("/api/public/deals/payment-status", response_model=PaymentStatusResponse)
@@ -42,7 +44,9 @@ async def payment_status(
     request: Request,
     capability: DealCapability = None,
 ) -> PaymentStatusResponse:
-    return await PaymentService(session, payment_client(request)).status(capability)
+    return await PaymentService(
+        session, payment_client(request), request.app.state.frontend_url
+    ).status(capability)
 
 
 @router.post("/api/webhooks/razorpay", response_model=WebhookResponse)

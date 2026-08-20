@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { CheckCircle2, LoaderCircle } from "lucide-react";
 import { PublicBuyerHeader } from "@/components/buyer/PublicBuyerHeader";
 import { BuyerOfferCard } from "@/components/buyer/BuyerOfferCard";
 import { BuyerNegotiationChat } from "@/components/buyer/BuyerNegotiationChat";
@@ -24,6 +25,9 @@ function PublicBuyerPage() {
   const [paymentState, setPaymentState] = useState<
     "idle" | "preparing" | "awaiting" | "paid" | "failed"
   >("idle");
+  const [returnState, setReturnState] = useState<
+    "none" | "returning" | "verifying" | "paid" | "failed" | "missing-capability"
+  >("none");
   const retryRef = useRef<{ text: string; id: string; buyerAdded: boolean } | null>(null);
 
   useEffect(() => {
@@ -55,6 +59,49 @@ function PublicBuyerPage() {
         }),
       )
       .catch(() => setError("This negotiable offer is unavailable."));
+  }, [slug]);
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("payment") !== "return") return;
+
+    const capability = getDealCapability(slug);
+    if (!capability) {
+      setReturnState("missing-capability");
+      return;
+    }
+
+    let cancelled = false;
+    let timer: number | undefined;
+    const started = Date.now();
+    setReturnState("returning");
+
+    const verify = async () => {
+      if (cancelled) return;
+      setReturnState("verifying");
+      try {
+        const status = await counterApi.getPaymentStatus(capability);
+        if (status.status === "paid") {
+          setPaymentState("paid");
+          setReturnState("paid");
+          return;
+        }
+        if (status.status === "expired" || status.status === "cancelled") {
+          setPaymentState("failed");
+          setReturnState("failed");
+          return;
+        }
+      } catch {
+        // Transient errors do not change payment truth; retry within the bounded window.
+      }
+      if (Date.now() - started < 2 * 60_000) timer = window.setTimeout(verify, 2500);
+      else setReturnState("failed");
+    };
+
+    timer = window.setTimeout(verify, 300);
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
   }, [slug]);
 
   const handleStartNegotiation = async () => {
@@ -135,27 +182,7 @@ function PublicBuyerPage() {
     setError(null);
     try {
       const payment = await counterApi.createPaymentLink(capability);
-      window.open(payment.payment_url, "_blank", "noopener,noreferrer");
-      setPaymentState("awaiting");
-      const started = Date.now();
-      const poll = window.setInterval(async () => {
-        if (Date.now() - started > 10 * 60_000) {
-          window.clearInterval(poll);
-          return;
-        }
-        try {
-          const status = await counterApi.getPaymentStatus(capability);
-          if (status.status === "paid") {
-            setPaymentState("paid");
-            window.clearInterval(poll);
-          } else if (status.status === "expired" || status.status === "cancelled") {
-            setPaymentState("failed");
-            window.clearInterval(poll);
-          }
-        } catch {
-          // A transient polling failure is safe; the server webhook remains authoritative.
-        }
-      }, 2500);
+      window.location.assign(payment.payment_url);
     } catch (cause) {
       setPaymentState("failed");
       setError(cause instanceof CounterApiError ? cause.message : "Checkout is unavailable.");
@@ -167,11 +194,42 @@ function PublicBuyerPage() {
       <PublicBuyerHeader merchantName={offer?.merchantName ?? "Counter Merchant"} />
       <main className="flex-1 flex flex-col items-center justify-center py-6">
         {error && <p className="mb-3 text-xs font-medium text-rose-700">{error}</p>}
-        {!offer && !error && <p className="text-sm text-muted-foreground">Loading offer…</p>}
-        {offer && viewState === "offer" && (
+        {returnState !== "none" && (
+          <div className="mx-4 w-full max-w-xl rounded-3xl border border-border bg-card p-8 text-center shadow-md">
+            {returnState === "paid" ? (
+              <CheckCircle2 className="mx-auto size-12 text-emerald-600" />
+            ) : (
+              <LoaderCircle className="mx-auto size-10 animate-spin text-amber-600" />
+            )}
+            <h1 className="mt-4 font-display text-3xl font-extrabold text-ink">
+              {returnState === "returning"
+                ? "Returning from secure checkout…"
+                : returnState === "verifying"
+                  ? "Verifying payment…"
+                  : returnState === "paid"
+                    ? "✓ Payment confirmed"
+                    : returnState === "missing-capability"
+                      ? "Payment was submitted."
+                      : "Payment confirmation is still pending."}
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {returnState === "paid"
+                ? "Razorpay confirmed this payment. Your negotiated deal is complete."
+                : returnState === "missing-capability"
+                  ? "Return to the original Counter deal session to verify status."
+                  : returnState === "failed"
+                    ? "Counter could not confirm a final payment status yet. Please return to this deal later."
+                    : "Counter is checking the signed server-side payment record."}
+            </p>
+          </div>
+        )}
+        {returnState === "none" && !offer && !error && (
+          <p className="text-sm text-muted-foreground">Loading offer…</p>
+        )}
+        {returnState === "none" && offer && viewState === "offer" && (
           <BuyerOfferCard offer={offer} onStartNegotiation={handleStartNegotiation} />
         )}
-        {offer && viewState === "chat" && (
+        {returnState === "none" && offer && viewState === "chat" && (
           <BuyerNegotiationChat
             offer={offer}
             messages={messages}
@@ -180,7 +238,7 @@ function PublicBuyerPage() {
             onSelectAgreedPrice={() => undefined}
           />
         )}
-        {offer && viewState === "agreed" && agreedPrice !== null && (
+        {returnState === "none" && offer && viewState === "agreed" && agreedPrice !== null && (
           <BuyerDealAgreedCard
             offer={offer}
             agreedPrice={agreedPrice}

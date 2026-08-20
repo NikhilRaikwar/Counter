@@ -59,6 +59,7 @@ def create_app(
             if resolved.razorpay_webhook_secret
             else ""
         )
+        app.state.frontend_url = str(resolved.frontend_url).rstrip("/")
         checkpoint_path = resolved.langgraph_checkpoint_path
         if checkpoint_path == "./counter_graph.db" and resolved.database_url.startswith(
             "sqlite+aiosqlite:///"

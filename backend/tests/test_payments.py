@@ -96,6 +96,11 @@ def test_locked_agreement_uses_database_amount_and_is_idempotent(tmp_path) -> No
     assert first.json()["amount_paise"] == 530_000
     assert len(fake.calls) == 1
     assert fake.calls[0]["amount"] == 530_000
+    assert fake.calls[0]["callback_url"].startswith("http://localhost:8080/d/payment-test-")
+    assert fake.calls[0]["callback_url"].endswith("?payment=return")
+    assert fake.calls[0]["callback_method"] == "get"
+    assert capability not in fake.calls[0]["callback_url"]
+    assert fake.calls[0]["reference_id"] not in fake.calls[0]["callback_url"]
     with sqlite3.connect(db_path) as db:
         assert db.execute("SELECT count(*) FROM payment_executions").fetchone()[0] == 1
 
@@ -187,15 +192,31 @@ def test_verified_paid_webhook_is_authoritative_and_duplicate_safe(tmp_path) -> 
         }
         paid = client.post("/api/webhooks/razorpay", content=body, headers=headers)
         duplicate = client.post("/api/webhooks/razorpay", content=body, headers=headers)
+        expired_payload = {
+            "event": "payment_link.expired",
+            "payload": {"payment_link": {"entity": payload["payload"]["payment_link"]["entity"]}},
+        }
+        expired_body = json.dumps(expired_payload, separators=(",", ":")).encode()
+        expired = client.post(
+            "/api/webhooks/razorpay",
+            content=expired_body,
+            headers={
+                "Content-Type": "application/json",
+                "X-Razorpay-Signature": signed("webhook-test-secret", expired_body),
+                "X-Razorpay-Event-Id": "event-expired-after-paid",
+            },
+        )
         status = client.get(
             "/api/public/deals/payment-status", headers={DEAL_HEADER: capability}
         )
     assert paid.status_code == duplicate.status_code == 200
+    assert expired.status_code == 200
     assert duplicate.json()["duplicate"] is True
     assert status.json()["status"] == "paid"
     with sqlite3.connect(db_path) as db:
         assert db.execute("SELECT status FROM deals").fetchone()[0] == "PAID"
-        assert db.execute("SELECT count(*) FROM webhook_events").fetchone()[0] == 1
+        assert db.execute("SELECT count(*) FROM webhook_events").fetchone()[0] == 2
+        assert db.execute("SELECT status FROM payment_executions").fetchone()[0] == "PAID"
 
 
 def test_invalid_signature_and_mismatched_terms_cannot_mark_paid(tmp_path) -> None:
