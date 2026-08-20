@@ -131,6 +131,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "icon", href: "/counter-favicon.png?v=2", type: "image/png" },
       { rel: "shortcut icon", href: "/counter-favicon.png?v=2" },
       { rel: "apple-touch-icon", href: "/counter-favicon.png" },
+      { rel: "alternate", type: "text/plain", href: "/llms.txt", title: "LLMs.txt" },
     ],
   }),
   shellComponent: RootShell,
