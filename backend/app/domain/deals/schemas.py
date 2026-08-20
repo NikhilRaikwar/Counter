@@ -65,6 +65,10 @@ class MerchantDealSummary(StrictDealSchema):
     accepted_currency: str | None
     accepted_bundle_id: str | None
     agreement_locked_at: datetime | None
+    payment_status: str | None = None
+    payment_amount_paise: StrictInt | None = None
+    payment_created_at: datetime | None = None
+    payment_paid_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 

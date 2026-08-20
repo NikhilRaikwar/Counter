@@ -21,6 +21,9 @@ function PublicBuyerPage() {
   const [isThinking, setIsThinking] = useState(false);
   const [agreedPrice, setAgreedPrice] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [paymentState, setPaymentState] = useState<
+    "idle" | "preparing" | "awaiting" | "paid" | "failed"
+  >("idle");
   const retryRef = useRef<{ text: string; id: string; buyerAdded: boolean } | null>(null);
 
   useEffect(() => {
@@ -125,6 +128,40 @@ function PublicBuyerPage() {
     }
   };
 
+  const handleOpenCheckout = async () => {
+    const capability = getDealCapability(slug);
+    if (!capability || paymentState === "preparing" || paymentState === "paid") return;
+    setPaymentState("preparing");
+    setError(null);
+    try {
+      const payment = await counterApi.createPaymentLink(capability);
+      window.open(payment.payment_url, "_blank", "noopener,noreferrer");
+      setPaymentState("awaiting");
+      const started = Date.now();
+      const poll = window.setInterval(async () => {
+        if (Date.now() - started > 10 * 60_000) {
+          window.clearInterval(poll);
+          return;
+        }
+        try {
+          const status = await counterApi.getPaymentStatus(capability);
+          if (status.status === "paid") {
+            setPaymentState("paid");
+            window.clearInterval(poll);
+          } else if (status.status === "expired" || status.status === "cancelled") {
+            setPaymentState("failed");
+            window.clearInterval(poll);
+          }
+        } catch {
+          // A transient polling failure is safe; the server webhook remains authoritative.
+        }
+      }, 2500);
+    } catch (cause) {
+      setPaymentState("failed");
+      setError(cause instanceof CounterApiError ? cause.message : "Checkout is unavailable.");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background flex flex-col font-sans">
       <PublicBuyerHeader merchantName={offer?.merchantName ?? "Counter Merchant"} />
@@ -144,7 +181,12 @@ function PublicBuyerPage() {
           />
         )}
         {offer && viewState === "agreed" && agreedPrice !== null && (
-          <BuyerDealAgreedCard offer={offer} agreedPrice={agreedPrice} />
+          <BuyerDealAgreedCard
+            offer={offer}
+            agreedPrice={agreedPrice}
+            onOpenCheckout={handleOpenCheckout}
+            paymentState={paymentState}
+          />
         )}
       </main>
       <footer className="border-t border-border/60 py-4 text-center text-xs text-muted-foreground">

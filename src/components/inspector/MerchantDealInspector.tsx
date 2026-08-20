@@ -184,6 +184,14 @@ export function MerchantDealInspector({ dealId: offerId }: { dealId: string }) {
                     ? `Locked at ₹${((deal.accepted_amount_paise ?? 0) / 100).toLocaleString("en-IN")}`
                     : "Not created"}
                 </p>
+                <p>
+                  <strong>Payment Link:</strong>{" "}
+                  {deal.payment_status ? deal.payment_status.toUpperCase() : "NOT CREATED"}
+                </p>
+                <p>
+                  <strong>Payment:</strong>{" "}
+                  {deal.payment_status === "paid" ? "CONFIRMED" : "AWAITING CONFIRMATION"}
+                </p>
               </div>
             )}
           </div>

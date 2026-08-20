@@ -7,12 +7,14 @@ interface BuyerDealAgreedCardProps {
   offer: Offer;
   agreedPrice: number;
   onOpenCheckout?: () => void;
+  paymentState?: "idle" | "preparing" | "awaiting" | "paid" | "failed";
 }
 
 export function BuyerDealAgreedCard({
   offer,
   agreedPrice,
   onOpenCheckout,
+  paymentState = "idle",
 }: BuyerDealAgreedCardProps) {
   const buyerSavings = Math.max(0, offer.listPrice - agreedPrice);
 
@@ -26,7 +28,7 @@ export function BuyerDealAgreedCard({
         </div>
 
         <h1 className="mt-3 font-display text-3xl font-extrabold text-ink sm:text-4xl">
-          Deal agreed.
+          {paymentState === "paid" ? "Payment confirmed." : "Deal agreed."}
         </h1>
         <p className="mt-1 text-xs text-muted-foreground">
           Approved within the seller's verified terms.
@@ -74,16 +76,30 @@ export function BuyerDealAgreedCard({
         <button
           type="button"
           onClick={onOpenCheckout}
-          disabled={!onOpenCheckout}
+          disabled={!onOpenCheckout || paymentState === "preparing" || paymentState === "paid"}
           className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-amber py-4 text-base font-bold text-amber-foreground shadow-xs disabled:cursor-not-allowed disabled:opacity-60"
         >
           <span>
-            {onOpenCheckout
-              ? `Pay ₹${agreedPrice.toLocaleString("en-IN")}`
-              : "Checkout available in the next phase"}
+            {paymentState === "preparing"
+              ? "Preparing secure checkout…"
+              : paymentState === "awaiting"
+                ? "Open checkout again"
+                : paymentState === "paid"
+                  ? "Payment confirmed"
+                  : `Pay ₹${agreedPrice.toLocaleString("en-IN")}`}
           </span>
           <ArrowRight className="size-4" />
         </button>
+        {paymentState === "awaiting" && (
+          <p className="mt-3 text-xs font-medium text-muted-foreground">
+            Checkout opened. Awaiting verified payment confirmation…
+          </p>
+        )}
+        {paymentState === "failed" && (
+          <p className="mt-3 text-xs font-medium text-rose-700">
+            Secure checkout could not be prepared. Please retry.
+          </p>
+        )}
 
         {/* Discreet Recruiter / Merchant Inspector Bridge */}
         {offer.id !== offer.slug && (

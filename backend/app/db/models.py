@@ -216,6 +216,8 @@ class PaymentExecution(TimestampMixin, Base):
     provider_payment_id: Mapped[str | None] = mapped_column(String(80), unique=True)
     short_url: Mapped[str | None] = mapped_column(String(500))
     error_code: Mapped[str | None] = mapped_column(String(120))
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    verified_webhook_event_id: Mapped[str | None] = mapped_column(String(160))
 
     deal: Mapped[Deal] = relationship(back_populates="payment_executions")
 

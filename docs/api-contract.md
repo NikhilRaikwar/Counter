@@ -1,4 +1,12 @@
-# Counter Phase 2 API Contract
+# Counter API Contract
+
+## Phase 7 payment API
+
+`POST /api/public/deals/payment-link` requires `X-Counter-Deal-Capability`. Its body must be `{}`; financial fields are rejected. It returns a hosted Razorpay Test URL only after locked-agreement revalidation. Repeated calls return the same URL.
+
+`GET /api/public/deals/payment-status` requires the buyer capability and returns only status, locked amount, currency, and paid timestamp.
+
+`POST /api/webhooks/razorpay` is authenticated by an HMAC signature over exact raw bytes and deduplicated by event ID. Only a verified, fully correlated `payment_link.paid` event can mark payment paid.
 
 Base URL in local development: `http://localhost:8000`. JSON requests reject unknown fields. Money is always an integer number of currency subunits; `2_000_000` paise represents ₹20,000. Phase 2 supports `INR` only.
 

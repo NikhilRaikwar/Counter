@@ -103,6 +103,7 @@ npm run build
 - [Policy extraction](docs/policy-extraction.md)
 - [Negotiation agent](docs/negotiation-agent.md)
 - [Deterministic policy gate](docs/policy-gate.md)
+- [Razorpay Test payment loop](docs/razorpay-payment-links.md)
 - [Frontend integration](docs/frontend-integration.md)
 - [Mock-to-real integration map](docs/frontend-integration-map.md)
 - [Implementation phases](docs/implementation-plan.md)
@@ -110,6 +111,6 @@ npm run build
 ## Status
 
 ```text
-CURRENT: Phase 0–6 complete
-NEXT:    Phase 7 — Razorpay Test Payment Link execution
+CURRENT: Phase 0–7 application flow complete
+NEXT:    Production Test Mode verification and deployment handoff
 ```

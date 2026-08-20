@@ -78,6 +78,13 @@ export type BuyerTurnResponse = {
   };
 };
 
+export type PaymentStatus = {
+  status: "created" | "paid" | "expired" | "cancelled";
+  amount_paise: number;
+  currency: "INR";
+  paid_at: string | null;
+};
+
 export type MerchantDeal = {
   id: string;
   status: string;
@@ -91,6 +98,10 @@ export type MerchantDeal = {
   accepted_currency: string | null;
   accepted_bundle_id: string | null;
   agreement_locked_at: string | null;
+  payment_status: string | null;
+  payment_amount_paise: number | null;
+  payment_created_at: string | null;
+  payment_paid_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -192,6 +203,25 @@ export class CounterApiClient {
       method: "POST",
       headers: { "X-Counter-Deal-Capability": capability },
       body: JSON.stringify({ message, client_message_id: clientMessageId }),
+    });
+  }
+
+  async createPaymentLink(capability: string) {
+    return this.request<{
+      status: "payment_link_ready";
+      payment_url: string;
+      amount_paise: number;
+      currency: "INR";
+    }>("/api/public/deals/payment-link", {
+      method: "POST",
+      headers: { "X-Counter-Deal-Capability": capability },
+      body: JSON.stringify({}),
+    });
+  }
+
+  async getPaymentStatus(capability: string) {
+    return this.request<PaymentStatus>("/api/public/deals/payment-status", {
+      headers: { "X-Counter-Deal-Capability": capability },
     });
   }
 

@@ -352,6 +352,7 @@ class MerchantDealReadService:
 
     @staticmethod
     def _summary(deal: Deal) -> MerchantDealSummary:
+        payment = max(deal.payment_executions, key=lambda item: item.created_at, default=None)
         return MerchantDealSummary(
             id=deal.id,
             status=deal.status.value,
@@ -365,6 +366,10 @@ class MerchantDealReadService:
             accepted_currency=deal.accepted_currency,
             accepted_bundle_id=deal.accepted_bundle_id,
             agreement_locked_at=deal.agreement_locked_at,
+            payment_status=payment.status.value if payment else None,
+            payment_amount_paise=payment.amount_paise if payment else None,
+            payment_created_at=payment.created_at if payment else None,
+            payment_paid_at=payment.paid_at if payment else None,
             created_at=deal.created_at,
             updated_at=deal.updated_at,
         )

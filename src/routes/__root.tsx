@@ -98,7 +98,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           "Set a floor price and approve bounds. Counter negotiates with buyers in real time and creates a verified payment link only when the deal is safe.",
       },
       { property: "og:type", content: "website" },
-      { property: "og:image", content: "/counter-banner.png" },
+      { property: "og:url", content: "https://counter.nikhilraikwar.me/" },
+      {
+        property: "og:image",
+        content: "https://counter.nikhilraikwar.me/counter-banner.png",
+      },
       { property: "og:image:alt", content: "Counter - AI Margin Protection & Deal Negotiation" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Counter — Your AI negotiates, your margins stay safe" },
@@ -107,7 +111,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         content:
           "Set a floor price and approve bounds. Counter negotiates with buyers in real time and creates a verified payment link only when the deal is safe.",
       },
-      { name: "twitter:image", content: "/counter-banner.png" },
+      {
+        name: "twitter:image",
+        content: "https://counter.nikhilraikwar.me/counter-banner.png",
+      },
       { name: "twitter:image:alt", content: "Counter - AI Margin Protection & Deal Negotiation" },
     ],
     links: [
@@ -121,7 +128,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: appCss,
       },
-      { rel: "icon", href: "/counter-favicon.png", type: "image/png" },
+      { rel: "icon", href: "/counter-favicon.png?v=2", type: "image/png" },
+      { rel: "shortcut icon", href: "/counter-favicon.png?v=2" },
       { rel: "apple-touch-icon", href: "/counter-favicon.png" },
     ],
   }),

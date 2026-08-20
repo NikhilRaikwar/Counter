@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.db.models import Deal, DealMessage, MessageSender, Offer, OfferStatus, PolicyVersion
 
@@ -68,11 +69,16 @@ class DealRepository:
 
     async def for_offer(self, offer_id: str) -> list[Deal]:
         result = await self.session.scalars(
-            select(Deal).where(Deal.offer_id == offer_id).order_by(Deal.created_at.desc())
+            select(Deal)
+            .options(selectinload(Deal.payment_executions))
+            .where(Deal.offer_id == offer_id)
+            .order_by(Deal.created_at.desc())
         )
         return list(result)
 
     async def for_offer_by_id(self, offer_id: str, deal_id: str) -> Deal | None:
         return await self.session.scalar(
-            select(Deal).where(Deal.offer_id == offer_id, Deal.id == deal_id)
+            select(Deal)
+            .options(selectinload(Deal.payment_executions))
+            .where(Deal.offer_id == offer_id, Deal.id == deal_id)
         )
