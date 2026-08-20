@@ -1,4 +1,5 @@
 [build]
+# Railway resolves this file and Dockerfile relative to the /backend service root.
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
