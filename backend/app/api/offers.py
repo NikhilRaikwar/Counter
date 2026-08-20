@@ -63,6 +63,7 @@ def policy_response(policy: PolicyVersion) -> PrivatePolicyResponse:
         allowed_actions=data.get("allowed_actions", []),
         forbidden_actions=data.get("forbidden_actions", []),
         original_rules_text=policy.raw_rules,
+        concession_strategy=data.get("concession_strategy", {}),
         created_at=policy.created_at,
     )
 

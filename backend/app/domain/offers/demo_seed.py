@@ -29,6 +29,16 @@ def _policy_payload() -> dict[str, object]:
         ],
         "allowed_actions": ["negotiate_price", "offer_bundle", "accept_deal", "create_checkout"],
         "forbidden_actions": ["price_below_floor", "invent_bundle", "change_product_scope"],
+        "concession_strategy": {
+            "mode": "buyer_must_improve",
+            "opening_counter_paise": DEMO_LIST_PRICE_PAISE,
+            "min_buyer_improvement_paise": 20_000,
+            "max_concession_per_round_paise": 20_000,
+            "hold_on_repeat_offer": True,
+            "hold_on_worse_offer": True,
+            "accept_buyer_offer_if_authorized": True,
+            "hold_at_floor": True,
+        },
     }
 
 

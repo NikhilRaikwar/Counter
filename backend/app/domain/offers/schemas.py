@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Annotated, Literal
 
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from app.domain.policies.schemas import ConcessionStrategy
 
 Currency = Literal["INR"]
 NonBlank = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
@@ -57,6 +58,7 @@ class PolicyPublish(StrictSchema):
         default_factory=list, max_length=25
     )
     original_rules_text: str = Field(default="", max_length=10_000)
+    concession_strategy: ConcessionStrategy | None = None
 
     @model_validator(mode="after")
     def unique_policy_entries(self) -> "PolicyPublish":
@@ -105,6 +107,7 @@ class PrivatePolicyResponse(BaseModel):
     allowed_actions: list[str]
     forbidden_actions: list[str]
     original_rules_text: str
+    concession_strategy: ConcessionStrategy
     created_at: datetime
 
 

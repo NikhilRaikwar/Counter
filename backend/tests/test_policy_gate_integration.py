@@ -172,3 +172,55 @@ def test_public_response_hides_policy_violations_and_private_authority(tmp_path)
         "management",
     ):
         assert private not in serialized
+
+
+def test_buyer_must_improve_strategy_holds_then_allows_a_bounded_concession(tmp_path) -> None:
+    decisions = [
+        model_decision("counter", 580_000),
+        model_decision("counter", 560_000),
+        model_decision("counter", 580_000),
+    ]
+    _, app = phase5_api(tmp_path, decisions)
+    with TestClient(app) as client:
+        created = client.post(
+            "/api/offers",
+            json={
+                "merchant_display_name": "Acme Studio",
+                "product_name": "Strategy Test",
+                "description": "Strategy fixture.",
+                "image_url": None,
+                "list_price_paise": 600_000,
+                "currency": "INR",
+            },
+        ).json()
+        response = publish(
+            client,
+            created["offer"]["id"],
+            created["management_capability"],
+            policy_payload(
+                floor_price_paise=520_000,
+                max_discount_paise=80_000,
+                concession_strategy={
+                    "mode": "buyer_must_improve",
+                    "opening_counter_paise": 600_000,
+                    "min_buyer_improvement_paise": 20_000,
+                    "max_concession_per_round_paise": 20_000,
+                    "hold_on_repeat_offer": True,
+                    "hold_on_worse_offer": True,
+                    "accept_buyer_offer_if_authorized": True,
+                    "hold_at_floor": True,
+                },
+            ),
+        )
+        assert response.status_code == 200
+        capability = start_deal(client, response.json()["offer"]["public_slug"])
+        lowball = turn(client, capability, "₹4,500?", "strategy-lowball")
+        repeat = turn(client, capability, "₹4,500?", "strategy-repeat")
+        improved = turn(client, capability, "₹4,800?", "strategy-improved")
+
+    assert lowball.json()["candidate"]["validation_status"] == "failed"
+    assert lowball.json()["message"]["content"] == "My current offer is still ₹6,000."
+    assert repeat.json()["candidate"]["validation_status"] == "failed"
+    assert repeat.json()["message"]["content"] == "My current offer is still ₹6,000."
+    assert improved.json()["candidate"]["validation_status"] == "passed"
+    assert improved.json()["message"]["content"] == "I can do ₹5,800."

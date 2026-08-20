@@ -19,6 +19,9 @@ class NegotiationContext:
     last_counter_amount_paise: int | None
     history: list[dict[str, Any]]
     buyer_message: str
+    concession_strategy: dict[str, Any] | None = None
+    best_buyer_offer_paise: int | None = None
+    last_buyer_offer_paise: int | None = None
 
 
 NEGOTIATION_SYSTEM_PROMPT = """You propose exactly one bounded negotiation move for Counter.
@@ -41,10 +44,13 @@ def build_negotiation_messages(context: NegotiationContext) -> list[tuple[str, s
             "max_discount_paise": context.max_discount_paise,
             "max_rounds": context.max_rounds,
             "approved_bundles": context.allowed_bundles,
+            "concession_strategy": context.concession_strategy or {},
         },
         "state": {
             "current_round": context.current_round,
             "last_counter_amount_paise": context.last_counter_amount_paise,
+            "best_buyer_offer_paise": context.best_buyer_offer_paise,
+            "last_buyer_offer_paise": context.last_buyer_offer_paise,
             "canonical_history": context.history,
         },
     }

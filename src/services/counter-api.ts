@@ -41,6 +41,18 @@ export type StructuredPolicy = {
   allowed_actions: string[];
   forbidden_actions: string[];
   original_rules_text?: string;
+  concession_strategy?: ConcessionStrategy | null;
+};
+
+export type ConcessionStrategy = {
+  mode: "immediate" | "buyer_must_improve" | "hold_firm";
+  opening_counter_paise: number | null;
+  min_buyer_improvement_paise: number;
+  max_concession_per_round_paise: number;
+  hold_on_repeat_offer: boolean;
+  hold_on_worse_offer: boolean;
+  accept_buyer_offer_if_authorized: boolean;
+  hold_at_floor: boolean;
 };
 
 export type PolicyDraftResponse = {
@@ -58,6 +70,7 @@ export type PolicyDraftResponse = {
     }>;
     allowed_actions: string[];
     forbidden_actions: string[];
+    concession_strategy: ConcessionStrategy | null;
     missing_fields: string[];
     warnings: string[];
   };

@@ -16,6 +16,12 @@ The gate is ordinary server-side Python. It has no model, tool, MCP, network, Ra
 
 Bundles use exact IDs from the deal's immutable policy snapshot. There is no fuzzy matching. A bundle from another offer or later policy version fails.
 
+## Merchant negotiation strategy
+
+The immutable policy also carries a private, merchant-confirmed concession strategy. It is distinct from commercial authority: strategy determines **when** Counter may move its own price; the financial gate determines **what** price can be authorized. The server persistently tracks the best and latest untrusted buyer offer plus the last validated Counter offer for each deal. A `buyer_must_improve` strategy can require a minimum buyer movement and cap one Counter concession; repeated, worse, or insufficiently improved offers keep the existing seller position. A `hold_firm` strategy disallows seller concessions. An explicit `immediate` strategy is available only when the merchant deliberately chooses flexible concessions.
+
+The LLM receives this private context to choose a conversational move, but it cannot mutate strategy, override it, or reveal it to the buyer. Strategy rejection is persisted as a private stable violation and produces the same buyer-safe continuation as any rejected candidate.
+
 Examples for list ₹6,000, floor ₹5,200, and maximum discount ₹800:
 
 - `counter ₹5,400` passes and is deterministically rendered as `I can do ₹5,400.`

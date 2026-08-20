@@ -13,6 +13,7 @@ from app.domain.offers.security import (
     verify_management_capability,
 )
 from app.domain.offers.slug import generate_public_slug
+from app.domain.policies.schemas import ConcessionMode, ConcessionStrategy
 from app.errors import ApplicationError
 
 
@@ -92,6 +93,7 @@ class OfferService:
                     "allowed_bundles": [bundle.model_dump() for bundle in payload.allowed_bundles],
                     "allowed_actions": payload.allowed_actions,
                     "forbidden_actions": payload.forbidden_actions,
+                    "concession_strategy": self._strategy(offer, payload).model_dump(mode="json"),
                 },
             )
             self.session.add(policy)
@@ -118,6 +120,21 @@ class OfferService:
         if offer is None:
             raise ApplicationError("public_offer_not_found", "Public offer not found", 404)
         return offer
+
+    @staticmethod
+    def _strategy(offer: Offer, payload: PolicyPublish) -> ConcessionStrategy:
+        strategy = payload.concession_strategy or ConcessionStrategy(
+            mode=ConcessionMode.HOLD_FIRM,
+            opening_counter_paise=offer.list_price_paise,
+            accept_buyer_offer_if_authorized=True,
+        )
+        if strategy.opening_counter_paise is None:
+            strategy = strategy.model_copy(update={"opening_counter_paise": offer.list_price_paise})
+        if strategy.opening_counter_paise != offer.list_price_paise:
+            raise ApplicationError("invalid_concession_strategy", "Opening position must match the public list price", 400)
+        if strategy.max_concession_per_round_paise > payload.max_discount_paise:
+            raise ApplicationError("invalid_concession_strategy", "A concession step cannot exceed the discount authority", 400)
+        return strategy
 
     @staticmethod
     def _authorize(offer: Offer | None, capability: str | None) -> None:
@@ -159,5 +176,6 @@ class OfferService:
                 "allowed_bundles": [bundle.model_dump() for bundle in payload.allowed_bundles],
                 "allowed_actions": payload.allowed_actions,
                 "forbidden_actions": payload.forbidden_actions,
+                "concession_strategy": OfferService._strategy(offer, payload).model_dump(mode="json"),
             }
         )

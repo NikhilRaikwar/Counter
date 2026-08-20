@@ -154,6 +154,10 @@ class Deal(TimestampMixin, Base):
     candidate_bundle_id: Mapped[str | None] = mapped_column(String(120))
     candidate_validation_status: Mapped[str | None] = mapped_column(String(32))
     candidate_violation_codes: Mapped[list[str] | None] = mapped_column(JSON)
+    best_buyer_offer_paise: Mapped[int | None] = mapped_column(BigInteger)
+    last_buyer_offer_paise: Mapped[int | None] = mapped_column(BigInteger)
+    last_valid_counter_amount_paise: Mapped[int | None] = mapped_column(BigInteger)
+    commercial_rounds_used: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     offer: Mapped[Offer] = relationship(back_populates="deals")
     policy_version: Mapped[PolicyVersion] = relationship(back_populates="deals")

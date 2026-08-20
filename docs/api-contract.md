@@ -43,7 +43,7 @@ The response contains `{ "offer": MerchantOfferSummary, "management_capability":
 
 `GET /api/offers/{offer_id}` with the management header -> `200`.
 
-Returns the private offer and `current_policy`. The policy includes floor, discount cap, round/expiry bounds, structured bundles/actions, and original merchant-confirmed text. Missing or incorrect capability returns a generic `403` without private data. Unknown internal ID returns `404`.
+Returns the private offer and `current_policy`. The policy includes floor, discount cap, round/expiry bounds, structured bundles/actions, original merchant-confirmed text, and the private concession strategy that controls when Counter may lower its own offer. Missing or incorrect capability returns a generic `403` without private data. Unknown internal ID returns `404`.
 
 ## Update draft
 
@@ -69,6 +69,16 @@ The body is a merchant-confirmed structured policy:
   ],
   "allowed_actions": ["negotiate_price", "offer_bundle", "accept_deal", "create_checkout"],
   "forbidden_actions": ["price_below_floor", "invent_bundle", "change_product"],
+  "concession_strategy": {
+    "mode": "buyer_must_improve",
+    "opening_counter_paise": 2000000,
+    "min_buyer_improvement_paise": 20000,
+    "max_concession_per_round_paise": 20000,
+    "hold_on_repeat_offer": true,
+    "hold_on_worse_offer": true,
+    "accept_buyer_offer_if_authorized": true,
+    "hold_at_floor": true
+  },
   "original_rules_text": "Merchant-confirmed structured authority."
 }
 ```
@@ -85,7 +95,7 @@ No LLM or text extraction runs. The transaction validates bounds/currency, alloc
 
 The endpoint authenticates the capability, reloads trusted offer data, and returns a strictly validated but non-authoritative draft. `status` is `review_required` or `conflict`; the response includes trusted public offer context, the typed draft, conflicts, warnings, and missing fields.
 
-Missing values remain `null`; the service never supplies financial defaults. Deterministic conflicts cover inconsistent floor/discount arithmetic, unsupported currency, negative/non-finite money, a product price that differs from database truth, and bundles absent from the source rules. The response does not create or update a `policy_version`. Only the separate merchant-confirmed publish endpoint creates authority.
+Missing values remain `null`; the service never supplies financial defaults. A strategy is extracted only when stated clearly; otherwise publishing uses a merchant-visible conservative hold-firm default. Deterministic conflicts cover inconsistent floor/discount arithmetic, unsupported currency, negative/non-finite money, a product price that differs from database truth, and bundles absent from the source rules. The response does not create or update a `policy_version`. Only the separate merchant-confirmed publish endpoint creates authority.
 
 Provider exhaustion or invalid structured output returns sanitized error code `policy_extraction_unavailable` with status `503`. Model selection is server configuration and is not accepted in this request.
 
@@ -135,7 +145,7 @@ The raw value above is illustrative, never a real token. Only its SHA-256 verifi
 }
 ```
 
-The candidate begins as model output, not authority. The server deterministically gates every commercial action. A passing `accept` returns `deal_status: agreed` and atomically locks accepted database terms. A failed commercial candidate returns a safe refusal-shaped public candidate with no amount; its original value and violation codes remain private. A locked deal rejects a new turn with `409 agreement_locked`, while an exact idempotent retry returns the existing response.
+The candidate begins as model output, not authority. Before financial validation, a deterministic strategy check uses the immutable policy and per-deal canonical buyer/counter movement state to decide whether Counter may make a concession at all. The server then deterministically gates every commercial action. A passing `accept` returns `deal_status: agreed` and atomically locks accepted database terms. A failed commercial or strategy candidate returns a safe refusal-shaped public candidate with no amount; its original value and violation codes remain private. A locked deal rejects a new turn with `409 agreement_locked`, while an exact idempotent retry returns the existing response.
 
 `client_message_id` provides turn idempotency. An exact retry returns the existing response; using the same ID with different content returns `409 client_message_id_conflict`. Missing or wrong deal capability returns a generic `403`. Provider/schema failure returns `503 negotiation_unavailable` and records no canonical turn.
 

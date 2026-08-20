@@ -66,6 +66,21 @@ def validate_extraction(
         missing.append("max_rounds")
     if draft.expiry_minutes is None and "expiry_minutes" not in missing:
         missing.append("expiry_minutes")
+    strategy = draft.concession_strategy
+    if strategy is not None and strategy.opening_counter_paise not in {None, offer.list_price_paise}:
+        conflicts.append(
+            PolicyConflict(
+                code="strategy_opening_price_mismatch",
+                message="The negotiation starting position must match the trusted public list price.",
+            )
+        )
+    if strategy is not None and strategy.max_concession_per_round_paise > (draft.max_discount_paise or 0):
+        conflicts.append(
+            PolicyConflict(
+                code="strategy_concession_exceeds_authority",
+                message="A concession step cannot exceed the stated maximum discount authority.",
+            )
+        )
 
     floor = draft.floor_price_paise
     discount = draft.max_discount_paise

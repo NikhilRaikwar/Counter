@@ -73,6 +73,15 @@ def policy_payload(**overrides):
         ],
         "allowed_actions": ["negotiate_price", "offer_bundle", "accept_deal", "create_checkout"],
         "forbidden_actions": ["price_below_floor", "invent_bundle", "change_product"],
+        "concession_strategy": {
+            "mode": "immediate",
+            "min_buyer_improvement_paise": 0,
+            "max_concession_per_round_paise": 0,
+            "hold_on_repeat_offer": False,
+            "hold_on_worse_offer": False,
+            "accept_buyer_offer_if_authorized": True,
+            "hold_at_floor": True,
+        },
         "original_rules_text": "Merchant-confirmed structured authority.",
     }
     payload.update(overrides)

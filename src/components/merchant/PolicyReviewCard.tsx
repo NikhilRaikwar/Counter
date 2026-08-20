@@ -26,6 +26,7 @@ type DraftData = {
   policy: MerchantPolicy;
   floorPricePaise: number;
   maxDiscountPaise: number;
+  concessionStrategy: NonNullable<import("@/services/counter-api").ConcessionStrategy>;
 };
 
 export function PolicyReviewCard() {
@@ -63,6 +64,16 @@ export function PolicyReviewCard() {
       },
       floorPricePaise: extracted.floor_price_paise ?? 0,
       maxDiscountPaise: extracted.max_discount_paise ?? 0,
+      concessionStrategy: extracted.concession_strategy ?? {
+        mode: "hold_firm",
+        opening_counter_paise: review.offer.list_price_paise,
+        min_buyer_improvement_paise: 0,
+        max_concession_per_round_paise: 0,
+        hold_on_repeat_offer: true,
+        hold_on_worse_offer: true,
+        accept_buyer_offer_if_authorized: true,
+        hold_at_floor: true,
+      },
     });
   }, []);
 
@@ -95,6 +106,7 @@ export function PolicyReviewCard() {
         allowed_actions: draft.policy.allowedActions,
         forbidden_actions: draft.policy.blockedActions,
         original_rules_text: draft.policy.rawRules ?? "",
+        concession_strategy: draft.concessionStrategy,
       });
       clearPendingPolicyReview();
       router.navigate({ to: "/deals/$id/published", params: { id: offerId } });
@@ -157,6 +169,70 @@ export function PolicyReviewCard() {
             >
               Edit details
             </Link>
+          </div>
+
+          <div className="mt-6 rounded-xl border border-amber-200 bg-amber-soft/40 p-5 text-sm">
+            <h3 className="font-display font-bold text-ink">Negotiation strategy</h3>
+            <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+              <p>
+                <span className="text-muted-foreground">Starting position</span>
+                <br />
+                <strong>
+                  ₹
+                  {((draft.concessionStrategy.opening_counter_paise ?? 0) / 100).toLocaleString(
+                    "en-IN",
+                  )}
+                </strong>
+              </p>
+              <p>
+                <span className="text-muted-foreground">Buyer must improve before we discount</span>
+                <br />
+                <strong>
+                  {draft.concessionStrategy.mode === "buyer_must_improve"
+                    ? "Yes"
+                    : draft.concessionStrategy.mode === "immediate"
+                      ? "No — merchant permits flexibility"
+                      : "No — hold firm"}
+                </strong>
+              </p>
+              <p>
+                <span className="text-muted-foreground">Minimum buyer improvement</span>
+                <br />
+                <strong>
+                  ₹
+                  {(draft.concessionStrategy.min_buyer_improvement_paise / 100).toLocaleString(
+                    "en-IN",
+                  )}
+                </strong>
+              </p>
+              <p>
+                <span className="text-muted-foreground">Maximum concession per move</span>
+                <br />
+                <strong>
+                  ₹
+                  {(draft.concessionStrategy.max_concession_per_round_paise / 100).toLocaleString(
+                    "en-IN",
+                  )}
+                </strong>
+              </p>
+              <p>
+                <span className="text-muted-foreground">Repeat or worse offer</span>
+                <br />
+                <strong>
+                  {draft.concessionStrategy.hold_on_repeat_offer &&
+                  draft.concessionStrategy.hold_on_worse_offer
+                    ? "Hold current price"
+                    : "Review required"}
+                </strong>
+              </p>
+              <p>
+                <span className="text-muted-foreground">At absolute floor</span>
+                <br />
+                <strong>
+                  {draft.concessionStrategy.hold_at_floor ? "Hold firm" : "Review required"}
+                </strong>
+              </p>
+            </div>
           </div>
 
           {/* Pricing & Policy breakdown */}

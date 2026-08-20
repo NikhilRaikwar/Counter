@@ -25,6 +25,23 @@ class ForbiddenAction(StrEnum):
     CHANGE_PRODUCT_SCOPE = "change_product_scope"
 
 
+class ConcessionMode(StrEnum):
+    IMMEDIATE = "immediate"
+    BUYER_MUST_IMPROVE = "buyer_must_improve"
+    HOLD_FIRM = "hold_firm"
+
+
+class ConcessionStrategy(StrictPolicySchema):
+    mode: ConcessionMode = ConcessionMode.HOLD_FIRM
+    opening_counter_paise: Money | None = None
+    min_buyer_improvement_paise: Money = 0
+    max_concession_per_round_paise: Money = 0
+    hold_on_repeat_offer: bool = True
+    hold_on_worse_offer: bool = True
+    accept_buyer_offer_if_authorized: bool = True
+    hold_at_floor: bool = True
+
+
 class ExtractedBundle(StrictPolicySchema):
     name: NonBlank = Field(max_length=160)
     additional_cost_paise: Money = 0
@@ -39,6 +56,7 @@ class ExtractionModelOutput(StrictPolicySchema):
     allowed_bundles: list[ExtractedBundle] = Field(default_factory=list, max_length=25)
     allowed_actions: list[PolicyAction] = Field(default_factory=list, max_length=4)
     forbidden_actions: list[ForbiddenAction] = Field(default_factory=list, max_length=2)
+    concession_strategy: ConcessionStrategy | None = None
     missing_fields: list[NonBlank] = Field(default_factory=list, max_length=20)
     warnings: list[NonBlank] = Field(default_factory=list, max_length=20)
 

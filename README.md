@@ -267,6 +267,7 @@ The important properties are the boundaries around economic authority.
 
 - **Immutable merchant policies** — Every deal stays tied to the exact policy version under which it began. Publishing a new merchant policy does not silently rewrite an active negotiation.
 - **Reusable published offers** — A live offer can serve many independent buyers. Each receives a separate deal, capability, LangGraph thread, agreement, and payment execution.
+- **Merchant-controlled concession strategy** — The immutable policy also determines when Counter may improve its own offer. Per-deal buyer movement and the last validated seller position are server-owned, so a low, repeated, or worse buyer offer cannot automatically pull Counter toward the private floor.
 - **Strict AgentDecision** — The model emits a constrained structured action, but schema validity does not make the action authoritative. It is still untrusted.
 - **Deterministic commercial validation** — Every price-bearing action is validated outside the negotiation graph against canonical merchant policy.
 - **Atomic agreement locking** — Only a validated acceptance can become authoritative. Concurrent or repeated acceptance attempts cannot rewrite the locked commercial state.

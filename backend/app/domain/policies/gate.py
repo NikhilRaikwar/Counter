@@ -20,6 +20,12 @@ class PolicyViolationCode(StrEnum):
     STALE_POLICY = "stale_policy"
     DEAL_NOT_ACTIVE = "deal_not_active"
     MALFORMED_DECISION = "malformed_decision"
+    CONCESSION_NOT_PERMITTED = "concession_not_permitted"
+    BUYER_IMPROVEMENT_REQUIRED = "buyer_improvement_required"
+    BUYER_OFFER_NOT_IMPROVED = "buyer_offer_not_improved"
+    CONCESSION_STEP_EXCEEDED = "concession_step_exceeded"
+    ACCEPT_NOT_PERMITTED_BY_STRATEGY = "accept_not_permitted_by_strategy"
+    ACCEPT_NOT_MATCHING_BUYER_OFFER = "accept_not_matching_buyer_offer"
 
 
 class MerchantPolicySnapshot(BaseModel):

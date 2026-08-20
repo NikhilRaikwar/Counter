@@ -30,6 +30,8 @@ from app.domain.policies.gate import (
     PolicyValidationResult,
     validate_decision,
 )
+from app.domain.policies.schemas import ConcessionStrategy
+from app.domain.policies.strategy import buyer_offer_from_text, validate_strategy
 from app.errors import ApplicationError
 from app.domain.offers.repository import OfferRepository
 from app.domain.offers.service import OfferService
@@ -115,6 +117,9 @@ class DealService:
                 max_discount_paise=policy.max_discount_paise,
                 max_rounds=policy.max_rounds,
                 allowed_bundles=policy_data.get("allowed_bundles", []),
+                concession_strategy=policy_data.get("concession_strategy", {}),
+                best_buyer_offer_paise=deal.best_buyer_offer_paise,
+                last_buyer_offer_paise=deal.last_buyer_offer_paise,
                 current_round=next_round,
                 last_counter_amount_paise=deal.last_counter_amount_paise,
                 history=[
@@ -171,7 +176,41 @@ class DealService:
                 agreement_locked=deal.agreement_locked_at is not None,
             )
             validation = validate_decision(policy_snapshot, deal_state, decision)
+            buyer_offer = buyer_offer_from_text(buyer_text)
+            strategy = ConcessionStrategy.model_validate(
+                policy_data.get("concession_strategy")
+                or {"opening_counter_paise": policy.list_price_paise}
+            )
+            strategy_violation = validate_strategy(
+                strategy,
+                decision,
+                buyer_offer_paise=buyer_offer,
+                best_buyer_offer_paise=deal.best_buyer_offer_paise,
+                last_buyer_offer_paise=deal.last_buyer_offer_paise,
+                last_counter_amount_paise=deal.last_valid_counter_amount_paise,
+            )
+            if strategy_violation:
+                from app.domain.policies.gate import PolicyViolationCode
+
+                validation = validation.model_copy(
+                    update={
+                        "allowed": False,
+                        "violations": tuple(
+                            list(validation.violations)
+                            + [PolicyViolationCode(strategy_violation)]
+                        ),
+                        "validated_amount_paise": None,
+                        "validated_bundle_id": None,
+                    }
+                )
             response_text = self._render_buyer_response(decision, validation, policy_snapshot)
+            if strategy_violation:
+                # A hold is a buyer-safe public outcome: it states only the
+                # already-public seller position, never the private reason,
+                # floor, movement threshold, or remaining authority.
+                held_amount = deal.last_valid_counter_amount_paise or strategy.opening_counter_paise
+                if held_amount is not None:
+                    response_text = f"My current offer is still {self._format_inr(held_amount)}."
             public_candidate = self._public_candidate(decision, validation)
             first_sequence = await self.repository.next_sequence(deal.id)
             buyer_message = DealMessage(
@@ -208,6 +247,10 @@ class DealService:
             )
             self.session.add_all([buyer_message, counter_message])
             deal.current_round = next_round
+            deal.commercial_rounds_used = next_round
+            deal.last_buyer_offer_paise = buyer_offer
+            if buyer_offer is not None and (deal.best_buyer_offer_paise is None or buyer_offer > deal.best_buyer_offer_paise):
+                deal.best_buyer_offer_paise = buyer_offer
             deal.candidate_action = decision.action.value
             deal.candidate_amount_paise = decision.proposed_amount_paise
             deal.candidate_bundle_id = decision.bundle_id
@@ -215,6 +258,7 @@ class DealService:
             deal.candidate_violation_codes = [code.value for code in validation.violations]
             if validation.allowed and decision.action == AgentAction.COUNTER:
                 deal.last_counter_amount_paise = validation.validated_amount_paise
+                deal.last_valid_counter_amount_paise = validation.validated_amount_paise
             if validation.allowed and decision.action == AgentAction.ACCEPT:
                 # Re-run immediately before locking inside this BEGIN IMMEDIATE transaction.
                 lock_check = validate_decision(policy_snapshot, deal_state, decision)
