@@ -1,0 +1,1 @@
+"""Bounded LangGraph negotiation workflow."""
