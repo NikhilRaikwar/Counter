@@ -45,7 +45,17 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins(self) -> list[str]:
-        return [str(self.frontend_url).rstrip("/")]
+        origins = {
+            str(self.frontend_url).rstrip("/"),
+            "https://counter.nikhilraikwar.me",
+            "http://localhost:8080",
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "http://127.0.0.1:8080",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:5173",
+        }
+        return [o for o in origins if o]
 
 
 @lru_cache

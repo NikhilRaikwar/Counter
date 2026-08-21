@@ -6,11 +6,11 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StringConstraints
 
 NonBlank = Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1)]
-Money = Annotated[StrictInt, Field(ge=0, le=10_000_000_000)]
+Money = Annotated[int, Field(ge=0, le=10_000_000_000)]
 
 
 class StrictPolicySchema(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
 
 class PolicyAction(StrEnum):

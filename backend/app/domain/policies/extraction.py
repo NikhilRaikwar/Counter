@@ -41,6 +41,8 @@ class PolicyDraftService:
                 "Policy extraction is temporarily unavailable; no draft was created",
                 503,
             ) from exc
+        if extraction.draft.concession_strategy is not None:
+            extraction.draft.concession_strategy.opening_counter_paise = trusted.list_price_paise
         result = validate_extraction(trusted, rules_text, extraction.draft)
         return PolicyDraftResponse(
             status="conflict" if result.conflicts else "review_required",

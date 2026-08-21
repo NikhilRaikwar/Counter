@@ -112,8 +112,13 @@ def validate_decision(
                 add(PolicyViolationCode.MAX_ROUNDS_EXCEEDED)
 
     required_authority = ACTION_AUTHORITY.get(decision.action)
-    if required_authority is not None and required_authority not in policy.allowed_actions:
-        add(PolicyViolationCode.ACTION_NOT_ALLOWED)
+    if required_authority is not None:
+        if decision.action != AgentAction.ACCEPT:
+            if required_authority not in policy.allowed_actions:
+                add(PolicyViolationCode.ACTION_NOT_ALLOWED)
+        else:
+            if "accept_deal" in getattr(policy, "forbidden_actions", ()):
+                add(PolicyViolationCode.ACTION_NOT_ALLOWED)
 
     amount = decision.proposed_amount_paise
     if decision.action in PRICE_ACTIONS:

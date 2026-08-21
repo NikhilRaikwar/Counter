@@ -4,7 +4,11 @@ import { Upload, X, ArrowRight, Sparkles, SlidersHorizontal, Tag, FileText } fro
 import { OFFER_PRESETS } from "@/lib/offer-presets";
 import type { MerchantPolicy } from "@/types/product";
 import { counterApi, CounterApiError } from "@/services/counter-api";
-import { saveMerchantCapability, savePendingPolicyReview } from "@/services/capability-store";
+import {
+  saveMerchantCapability,
+  savePendingPolicyReview,
+  getPendingPolicyReview,
+} from "@/services/capability-store";
 
 interface OfferFormProps {
   onProceedToReview?: (data: {
@@ -20,13 +24,26 @@ export function OfferForm({ onProceedToReview }: OfferFormProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [productName, setProductName] = useState("SEO Audit Pro");
-  const [description, setDescription] = useState(
-    "A complete technical SEO audit with prioritized fixes and one strategy session.",
-  );
-  const [listPrice, setListPrice] = useState("20000");
-  const [rules, setRules] = useState(
-    `Never sell below ₹17,500.
+  const [productName, setProductName] = useState(() => {
+    const pending = getPendingPolicyReview();
+    return pending?.offer.product_name ?? "SEO Audit Pro";
+  });
+  const [description, setDescription] = useState(() => {
+    const pending = getPendingPolicyReview();
+    return (
+      pending?.offer.description ??
+      "A complete technical SEO audit with prioritized fixes and one strategy session."
+    );
+  });
+  const [listPrice, setListPrice] = useState(() => {
+    const pending = getPendingPolicyReview();
+    return pending?.offer.list_price_paise ? String(pending.offer.list_price_paise / 100) : "20000";
+  });
+  const [rules, setRules] = useState(() => {
+    const pending = getPendingPolicyReview();
+    return (
+      pending?.rulesText ??
+      `Never sell below ₹17,500.
 
 Counter may discount by up to ₹2,500.
 
@@ -36,8 +53,9 @@ Maximum 4 negotiation rounds.
 
 Never include extra revisions.
 
-Never change the product scope.`,
-  );
+Never change the product scope.`
+    );
+  });
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -115,7 +133,9 @@ Never change the product scope.`,
       setError(
         cause instanceof CounterApiError
           ? cause.message
-          : "Counter could not create this draft. Check that the backend is running and retry.",
+          : cause instanceof Error
+            ? cause.message
+            : "Counter could not create this draft. Check that the backend is running and retry.",
       );
     } finally {
       setIsSubmitting(false);

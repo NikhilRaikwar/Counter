@@ -161,8 +161,12 @@ function PublicBuyerPage() {
         },
       ]);
       retryRef.current = null;
-      if (response.deal_status === "agreed" && response.candidate.amount_paise !== null) {
-        setAgreedPrice(response.candidate.amount_paise / 100);
+      if (response.deal_status === "agreed") {
+        const finalPrice =
+          response.candidate.amount_paise !== null && response.candidate.amount_paise !== undefined
+            ? response.candidate.amount_paise / 100
+            : agreedPrice || (offer ? offer.price : 0);
+        setAgreedPrice(finalPrice);
         setViewState("agreed");
       }
     } catch (cause) {

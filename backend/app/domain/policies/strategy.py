@@ -33,6 +33,12 @@ _COMMERCIAL_AMOUNT = re.compile(
         |can\s+go(?:\s+up)?\s+to
         |i'm\s+around
         |im\s+around
+        |close\s+at
+        |close\s+deal\s+at
+        |lock\s+at
+        |deal\s+at
+        |accept\s+at
+        |agree\s+to
         |would\s+you\s+take
         |will\s+you\s+take
     )
@@ -227,13 +233,13 @@ def build_counter_directive(
     first_authorized_offer = (
         best_buyer_offer_paise is None
         and strategy.allow_first_offer_concession
-        and buyer_offer_paise >= floor_price_paise
+        and (buyer_offer_paise is not None and buyer_offer_paise >= floor_price_paise)
     )
 
     meaningful_improvement = (
         best_buyer_offer_paise is not None
-        and buyer_offer_paise
-        >= best_buyer_offer_paise + strategy.min_buyer_improvement_paise
+        and buyer_offer_paise is not None
+        and buyer_offer_paise >= best_buyer_offer_paise + strategy.min_buyer_improvement_paise
     )
 
     if strategy.mode is ConcessionMode.IMMEDIATE:
@@ -288,13 +294,13 @@ def build_counter_directive(
 
 
 def validate_strategy(
-    strategy: ConcessionStrategy,
+    strategy: ConcessionStrategy | None,
     decision: AgentDecision,
     *,
-    buyer_offer_paise: int | None,
-    best_buyer_offer_paise: int | None,
-    last_buyer_offer_paise: int | None,
-    last_counter_amount_paise: int | None,
+    buyer_offer_paise: int | None = None,
+    best_buyer_offer_paise: int | None = None,
+    last_buyer_offer_paise: int | None = None,
+    last_counter_amount_paise: int | None = None,
     list_price_paise: int | None = None,
     floor_price_paise: int | None = None,
     max_discount_paise: int | None = None,
@@ -302,31 +308,26 @@ def validate_strategy(
     negotiate_price_allowed: bool = True,
 ) -> str | None:
     """
-    Validate negotiation strategy using canonical server state.
-
-    This does NOT replace the independent financial Policy Gate.
+    Deterministically validate a proposed decision against concession policy.
     """
-    current = last_counter_amount_paise or strategy.opening_counter_paise
+    if strategy is None:
+        return None
 
-    # Acceptance has separate semantics and must remain possible even when
-    # no more concessions may be made.
     if decision.action == AgentAction.ACCEPT:
         if not strategy.accept_buyer_offer_if_authorized:
             return "accept_not_permitted_by_strategy"
-
         if (
             buyer_offer_paise is not None
+            and decision.proposed_amount_paise is not None
             and decision.proposed_amount_paise != buyer_offer_paise
+            and (last_counter_amount_paise is None or decision.proposed_amount_paise != last_counter_amount_paise)
         ):
             return "accept_not_matching_buyer_offer"
-
         return None
 
-    # Repeat/worse buyer movement never earns better seller economics.
-    if (
-        buyer_offer_paise is not None
-        and last_buyer_offer_paise is not None
-    ):
+    current = last_counter_amount_paise or strategy.opening_counter_paise or list_price_paise
+
+    if last_buyer_offer_paise is not None and buyer_offer_paise is not None:
         if (
             strategy.hold_on_repeat_offer
             and buyer_offer_paise == last_buyer_offer_paise
@@ -339,8 +340,6 @@ def validate_strategy(
         ):
             return "buyer_offer_not_improved"
 
-    # If we have the policy bounds, enforce the calibrated "active counter"
-    # opportunity at the deterministic strategy layer, not merely via prompt.
     if (
         current is not None
         and list_price_paise is not None

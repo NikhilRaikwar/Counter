@@ -115,8 +115,9 @@ export function MerchantDealInspector({ dealId: offerId }: { dealId: string }) {
           </dl>
         </section>
         <section className="rounded-2xl border border-border bg-card lg:col-span-6 overflow-hidden">
-          <div className="border-b border-border px-5 py-4">
-            <h2 className="font-display text-sm font-bold">Conversation View</h2>
+          <div className="border-b border-border px-5 py-4 flex items-center justify-between">
+            <h2 className="font-display text-sm font-bold">Deal Conversation Flow</h2>
+            <span className="text-xs text-muted-foreground">Single Buyer Session</span>
           </div>
           <div className="min-h-[380px] max-h-[520px] space-y-4 overflow-y-auto p-5">
             {messages.length === 0 ? (
@@ -129,11 +130,12 @@ export function MerchantDealInspector({ dealId: offerId }: { dealId: string }) {
                   key={message.id}
                   className={`flex flex-col ${message.sender === "buyer" ? "items-end" : "items-start"}`}
                 >
-                  <span className="mb-1 text-[0.68rem] text-muted-foreground">
-                    {message.sender === "buyer" ? "Buyer" : "Counter"} · #{message.sequence}
+                  <span className="mb-1 text-[0.68rem] font-semibold text-muted-foreground">
+                    {message.sender === "buyer" ? "👤 Buyer" : "🤖 Counter Agent"} · Turn #
+                    {message.sequence}
                   </span>
                   <p
-                    className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${message.sender === "buyer" ? "bg-muted" : "bg-amber-soft"}`}
+                    className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${message.sender === "buyer" ? "bg-muted text-foreground" : "bg-amber-soft text-ink border border-amber-200/50"}`}
                   >
                     {message.text}
                   </p>
@@ -156,7 +158,7 @@ export function MerchantDealInspector({ dealId: offerId }: { dealId: string }) {
             {deal && (
               <div className="mt-4 space-y-3 text-xs">
                 <div
-                  className={`rounded-xl p-4 text-center ${failed ? "bg-rose-50 text-rose-800" : passed ? "bg-emerald-50 text-emerald-800" : "bg-muted"}`}
+                  className={`rounded-xl p-4 text-center ${failed ? "bg-rose-50 text-rose-800 border border-rose-200" : passed ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-muted"}`}
                 >
                   {failed ? (
                     <XCircle className="mx-auto size-6" />
@@ -167,44 +169,75 @@ export function MerchantDealInspector({ dealId: offerId }: { dealId: string }) {
                     Policy {deal.candidate_validation_status ?? "pending"}
                   </p>
                 </div>
-                <p>
-                  <strong>Candidate:</strong> {deal.candidate_action ?? "—"}{" "}
-                  {deal.candidate_amount_paise !== null
-                    ? `₹${(deal.candidate_amount_paise / 100).toLocaleString("en-IN")}`
-                    : ""}
-                </p>
+                <div className="space-y-1.5 pt-1">
+                  <p className="flex justify-between">
+                    <span className="text-muted-foreground">Candidate Action:</span>
+                    <span className="font-bold">{deal.candidate_action ?? "—"}</span>
+                  </p>
+                  {deal.candidate_amount_paise !== null && (
+                    <p className="flex justify-between">
+                      <span className="text-muted-foreground">Proposed Amount:</span>
+                      <span className="font-bold">
+                        ₹{(deal.candidate_amount_paise / 100).toLocaleString("en-IN")}
+                      </span>
+                    </p>
+                  )}
+                  <p className="flex justify-between">
+                    <span className="text-muted-foreground">Commercial Rounds:</span>
+                    <span className="font-bold">
+                      {deal.commercial_rounds_used} / {policy.max_rounds}
+                    </span>
+                  </p>
+                </div>
                 {deal.candidate_violation_codes.map((code) => (
-                  <p key={code} className="rounded-lg bg-rose-50 px-2 py-1 font-mono text-rose-800">
+                  <p
+                    key={code}
+                    className="rounded-lg bg-rose-50 px-2 py-1 font-mono text-[0.7rem] text-rose-800 border border-rose-200"
+                  >
                     {code}
                   </p>
                 ))}
-                <p>
-                  <strong>Agreement:</strong>{" "}
-                  {deal.agreement_locked_at
-                    ? `Locked at ₹${((deal.accepted_amount_paise ?? 0) / 100).toLocaleString("en-IN")}`
-                    : "Not created"}
-                </p>
-                <p>
-                  <strong>Payment Link:</strong>{" "}
-                  {deal.payment_status ? deal.payment_status.toUpperCase() : "NOT CREATED"}
-                </p>
-                <p>
-                  <strong>Payment:</strong>{" "}
-                  {deal.payment_status === "paid" ? "CONFIRMED" : "AWAITING CONFIRMATION"}
-                </p>
+                <div className="border-t border-border pt-2 space-y-1.5">
+                  <p className="flex justify-between">
+                    <span className="text-muted-foreground">Agreement:</span>
+                    <span className="font-bold">
+                      {deal.agreement_locked_at
+                        ? `Locked at ₹${((deal.accepted_amount_paise ?? 0) / 100).toLocaleString("en-IN")}`
+                        : "In Progress"}
+                    </span>
+                  </p>
+                  <p className="flex justify-between">
+                    <span className="text-muted-foreground">Checkout Status:</span>
+                    <span className="font-bold uppercase text-[0.7rem]">
+                      {deal.payment_status ? deal.payment_status : "Awaiting Lock"}
+                    </span>
+                  </p>
+                </div>
               </div>
             )}
           </div>
           <div className="rounded-2xl border border-border bg-card p-4">
-            <h3 className="font-display text-xs font-bold uppercase">Audit trail</h3>
-            {messages.flatMap((message) => {
-              const events = (message.metadata.events ?? []) as string[];
-              return events.map((event) => (
-                <p key={`${message.id}-${event}`} className="mt-2 text-xs text-muted-foreground">
-                  ✓ {event}
+            <h3 className="font-display text-xs font-bold uppercase tracking-wider mb-2">
+              Audit trail
+            </h3>
+            <div className="space-y-1.5 max-h-48 overflow-y-auto">
+              {Array.from(
+                new Set(
+                  messages.flatMap((message) => {
+                    const events = (message.metadata.events ?? []) as string[];
+                    return events;
+                  }),
+                ),
+              ).map((event) => (
+                <p
+                  key={event}
+                  className="text-[0.75rem] text-muted-foreground flex items-center gap-1.5"
+                >
+                  <CheckCircle2 className="size-3 text-emerald-600 shrink-0" />
+                  <span className="font-mono">{event}</span>
                 </p>
-              ));
-            })}
+              ))}
+            </div>
           </div>
         </section>
       </div>

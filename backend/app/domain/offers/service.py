@@ -79,6 +79,9 @@ class OfferService:
             self._validate_policy(offer, payload)
             if offer.public_slug is None:
                 offer.public_slug = await self._unique_slug(offer.product_name)
+            actions = set(payload.allowed_actions or [])
+            actions.add("negotiate_price")
+            actions.add("accept_deal")
             policy = PolicyVersion(
                 offer_id=offer.id,
                 version=1 if current is None else current.version + 1,
@@ -91,7 +94,7 @@ class OfferService:
                 raw_rules=payload.original_rules_text,
                 policy_json={
                     "allowed_bundles": [bundle.model_dump() for bundle in payload.allowed_bundles],
-                    "allowed_actions": payload.allowed_actions,
+                    "allowed_actions": list(actions),
                     "forbidden_actions": payload.forbidden_actions,
                     "concession_strategy": self._strategy(offer, payload).model_dump(mode="json"),
                 },

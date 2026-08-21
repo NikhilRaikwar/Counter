@@ -265,18 +265,32 @@ export class CounterApiClient {
     });
     if (!response.ok) {
       const body = (await response.json().catch(() => null)) as {
-        error?: { code?: string; message?: string };
+        error?: {
+          code?: string;
+          message?: string;
+          details?: Array<{ location: string[]; message: string }>;
+        };
       } | null;
-      throw new CounterApiError(
-        response.status,
-        body?.error?.code ?? "request_failed",
-        body?.error?.message ?? "Counter API request failed",
-      );
+      const detailMsg = body?.error?.details
+        ?.map((d) => `${d.location.filter((l) => l !== "body").join(".")}: ${d.message}`)
+        .join(", ");
+      const msg = detailMsg
+        ? `${body?.error?.message ?? "Validation failed"} (${detailMsg})`
+        : (body?.error?.message ?? "Counter API request failed");
+      throw new CounterApiError(response.status, body?.error?.code ?? "request_failed", msg);
     }
     return (await response.json()) as T;
   }
 }
 
-export const counterApi = new CounterApiClient(
-  import.meta.env.VITE_COUNTER_API_URL ?? "http://localhost:8000",
-);
+function resolveApiBaseUrl(): string {
+  if (import.meta.env.VITE_COUNTER_API_URL) {
+    return import.meta.env.VITE_COUNTER_API_URL;
+  }
+  if (typeof window !== "undefined") {
+    return "";
+  }
+  return "http://127.0.0.1:8000";
+}
+
+export const counterApi = new CounterApiClient(resolveApiBaseUrl());

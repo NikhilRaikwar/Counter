@@ -118,6 +118,10 @@ class DealService:
             )
             can_make_new_concession = deal.commercial_rounds_used < policy.max_rounds
 
+            actions = set(policy_data.get("allowed_actions", []))
+            actions.add("negotiate_price")
+            actions.add("accept_deal")
+
             buyer_offer = buyer_offer_from_text(buyer_text)
             strategy = ConcessionStrategy.model_validate(
                 policy_data.get("concession_strategy")
@@ -133,7 +137,7 @@ class DealService:
                 floor_price_paise=policy.floor_price_paise,
                 max_discount_paise=policy.max_discount_paise,
                 can_make_new_concession=can_make_new_concession,
-                negotiate_price_allowed="negotiate_price" in (policy_data.get("allowed_actions") or []),
+                negotiate_price_allowed="negotiate_price" in actions,
             )
 
             negotiation = NegotiationContext(
@@ -172,7 +176,7 @@ class DealService:
                 max_discount_paise=policy.max_discount_paise,
                 max_rounds=policy.max_rounds,
                 allowed_bundles=tuple(policy_data.get("allowed_bundles", [])),
-                allowed_actions=frozenset(policy_data.get("allowed_actions", [])),
+                allowed_actions=frozenset(actions),
             )
             deal_state = DealPolicyState(
                 offer_id=deal.offer_id,
@@ -298,8 +302,10 @@ class DealService:
 
             if buyer_offer is not None:
                 deal.last_buyer_offer_paise = buyer_offer
-                if deal.best_buyer_offer_paise is None or buyer_offer > deal.best_buyer_offer_paise:
+                if deal.best_buyer_offer_paise is None:
                     deal.best_buyer_offer_paise = buyer_offer
+                elif validation_passed and decision.action in {AgentAction.COUNTER, AgentAction.OFFER_BUNDLE, AgentAction.ACCEPT}:
+                    deal.best_buyer_offer_paise = max(deal.best_buyer_offer_paise, buyer_offer)
 
             deal.candidate_action = final_candidate.get("action")
             deal.candidate_amount_paise = final_candidate.get("proposed_amount_paise")
@@ -450,19 +456,20 @@ class DealService:
     @staticmethod
     def _response_from_messages(deal: Deal, counter: DealMessage) -> BuyerTurnResponse:
         candidate = (counter.metadata_json or {}).get("public_candidate", {})
-        action = candidate["action"]
+        action = candidate.get("action", "clarify")
         public_status = "agreed" if deal.status == DealStatus.AGREED else (
             "refused_candidate" if action == "refuse" else "negotiating"
         )
+        amount_paise = candidate.get("amount_paise") or deal.accepted_amount_paise
         return BuyerTurnResponse(
             deal_status=public_status,
             round=deal.current_round,
             message=BuyerSafeMessage(content=counter.text),
             candidate=BuyerSafeCandidate(
                 action=action,
-                amount_paise=candidate.get("amount_paise"),
-                bundle_id=candidate.get("bundle_id"),
-                validation_status=candidate["validation_status"],
+                amount_paise=amount_paise,
+                bundle_id=candidate.get("bundle_id") or deal.accepted_bundle_id,
+                validation_status=candidate.get("validation_status", "passed"),
             ),
         )
 

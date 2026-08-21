@@ -121,26 +121,62 @@ export function PolicyReviewCard() {
     setIsPublishing(true);
     setError(null);
     try {
+      const allowedActions = Array.from(
+        new Set(
+          (draft.policy.allowedActions || []).filter((a) =>
+            ["negotiate_price", "offer_bundle", "accept_deal", "create_checkout"].includes(a),
+          ),
+        ),
+      );
+      if (allowedActions.length === 0) {
+        allowedActions.push("negotiate_price", "accept_deal");
+      }
+      const forbiddenActions = Array.from(
+        new Set(
+          (draft.policy.blockedActions || []).filter(
+            (a) =>
+              ["invent_bundle", "change_product_scope"].includes(a) && !allowedActions.includes(a),
+          ),
+        ),
+      );
+
       await counterApi.publishOffer(offerId, capability, {
         currency: "INR",
-        floor_price_paise: draft.floorPricePaise,
-        max_discount_paise: draft.maxDiscountPaise,
-        max_rounds: draft.policy.maxRounds,
-        expiry_minutes: draft.policy.expiryMinutes,
-        allowed_bundles: draft.policy.allowedBundles.map((name, index) => ({
-          id: `${
-            name
-              .toLowerCase()
-              .replace(/[^a-z0-9]+/g, "-")
-              .replace(/^-|-$/g, "") || "bundle"
-          }-${index + 1}`,
-          name,
+        floor_price_paise: Math.round(Number(draft.floorPricePaise)),
+        max_discount_paise: Math.round(Number(draft.maxDiscountPaise)),
+        max_rounds: Math.max(1, Math.min(10, Math.round(Number(draft.policy.maxRounds || 4)))),
+        expiry_minutes: Math.max(
+          5,
+          Math.min(1440, Math.round(Number(draft.policy.expiryMinutes || 30))),
+        ),
+        allowed_bundles: (draft.policy.allowedBundles || []).map((name, index) => ({
+          id: `bundle-${index + 1}`,
+          name: name.trim() || `Bundle ${index + 1}`,
           additional_cost_paise: 0,
         })),
-        allowed_actions: draft.policy.allowedActions,
-        forbidden_actions: draft.policy.blockedActions,
+        allowed_actions: allowedActions,
+        forbidden_actions: forbiddenActions,
         original_rules_text: draft.policy.rawRules ?? "",
-        concession_strategy: draft.concessionStrategy,
+        concession_strategy: draft.concessionStrategy
+          ? {
+              mode: draft.concessionStrategy.mode || "buyer_must_improve",
+              opening_counter_paise: Math.round(
+                Number(draft.concessionStrategy.opening_counter_paise ?? draft.listPrice * 100),
+              ),
+              min_buyer_improvement_paise: Math.round(
+                Number(draft.concessionStrategy.min_buyer_improvement_paise || 0),
+              ),
+              max_concession_per_round_paise: Math.round(
+                Number(draft.concessionStrategy.max_concession_per_round_paise || 0),
+              ),
+              hold_on_repeat_offer: Boolean(draft.concessionStrategy.hold_on_repeat_offer),
+              hold_on_worse_offer: Boolean(draft.concessionStrategy.hold_on_worse_offer),
+              accept_buyer_offer_if_authorized: Boolean(
+                draft.concessionStrategy.accept_buyer_offer_if_authorized,
+              ),
+              hold_at_floor: Boolean(draft.concessionStrategy.hold_at_floor),
+            }
+          : null,
       });
       clearPendingPolicyReview();
       router.navigate({ to: "/deals/$id/published", params: { id: offerId } });
