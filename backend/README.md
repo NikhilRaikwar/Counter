@@ -1,23 +1,32 @@
 # Counter Backend
 
-Phase 1 provides the FastAPI application, configuration, async SQLite foundation, and initial Alembic schema. It intentionally contains no negotiation, LangGraph, or Razorpay business integration.
+FastAPI backend for Counter's bounded AI negotiation and payment authorization pipeline.
 
-## Reproducible setup
+## Core Modules
+- **Policy Extraction:** Structured extraction of commercial limits from plain English merchant rules.
+- **LangGraph Negotiation:** Multi-step cognitive loop (Observe → Plan → Gate Check → Replan → Compose).
+- **Deterministic Strategy Gate:** Merchant-controlled concession curves and step-size governance.
+- **Deterministic Financial Policy Gate:** Immutable floor price, list price, max discount, and round checks.
+- **Transactional Agreement Locking:** SQLite/Postgres atomic agreement state machine.
+- **Razorpay Payment Links:** Server-side Test Mode payment link creation bound to locked agreements.
+- **Signed Webhook Verification:** HMAC-SHA256 signature verification establishing canonical payment truth.
+
+## Reproducible Local Setup
 
 From `backend/` with Python 3.11+:
 
-```powershell
+```bash
 python -m venv .venv
-.venv\Scripts\python.exe -m pip install -r requirements.lock
-.venv\Scripts\python.exe -m pip install -e . --no-deps
-.venv\Scripts\python.exe -m alembic upgrade head
+.venv/Scripts/python -m pip install -r requirements.lock
+.venv/Scripts/python -m pip install -e . --no-deps
+.venv/Scripts/python -m alembic upgrade head
 ```
 
-Run tests and API:
+Run test suite & API:
 
-```powershell
-.venv\Scripts\python.exe -m pytest
-.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```bash
+.venv/Scripts/python -m pytest
+.venv/Scripts/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-`GET http://127.0.0.1:8000/health` checks application startup and database reachability. Copy `.env.example` to `.env` for local configuration; never commit `.env`.
+See root [README.md](../README.md) and [/docs](https://counter.nikhilraikwar.me/docs) for full system architecture.
