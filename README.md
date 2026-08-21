@@ -48,65 +48,9 @@ The money path cannot.
 
 ## How Counter Works
 
-```mermaid
-flowchart LR
+![Counter System Architecture](./public/counter-architecture.png)
 
-    %% ---------- COLORS ----------
-    classDef human fill:#FFF7E6,stroke:#F59E0B,stroke-width:2px,color:#111827;
-    classDef ai fill:#FFF3CC,stroke:#D97706,stroke-width:2px,color:#78350F;
-    classDef untrusted fill:#FFF1F2,stroke:#E11D48,stroke-width:2px,color:#881337;
-    classDef trusted fill:#ECFDF5,stroke:#16A34A,stroke-width:2px,color:#14532D;
-    classDef state fill:#EFF6FF,stroke:#2563EB,stroke-width:2px,color:#1E3A8A;
-    classDef payment fill:#EEF4FF,stroke:#2563EB,stroke-width:2px,color:#172554;
-    classDef proof fill:#DCFCE7,stroke:#15803D,stroke-width:3px,color:#14532D;
-
-    %% ---------- MERCHANT AUTHORITY ----------
-    subgraph AUTH["1 · MERCHANT AUTHORITY PLANE"]
-        direction LR
-        M["Merchant"]:::human
-        RULES["Plain-English<br/>commercial rules"]:::human
-        EXTRACT["AI PolicyDraft<br/>Extraction"]:::untrusted
-        REVIEW["Reviewable<br/>PolicyDraft"]:::ai
-        CONFIRM["Merchant<br/>Confirmation"]:::human
-        POLICY["Immutable<br/>Policy Version"]:::trusted
-
-        M --> RULES --> EXTRACT --> REVIEW --> CONFIRM --> POLICY
-    end
-
-    %% ---------- NEGOTIATION ----------
-    subgraph AGENT["2 · AGENTIC NEGOTIATION PLANE · LangGraph"]
-        direction LR
-        BUYER["Buyer Message"]:::untrusted
-        OBSERVE["Observe<br/>Canonical State"]:::state
-        PLAN["Planner LLM<br/>OpenRouter"]:::ai
-        DECISION["Strict<br/>AgentDecision"]:::untrusted
-        STRATEGY["Merchant<br/>Strategy Gate"]:::trusted
-        GATE["Financial<br/>Policy Gate"]:::trusted
-        SAFE["SafeOutcome"]:::trusted
-        COMPOSE["Natural Response<br/>Composer"]:::ai
-
-        BUYER --> OBSERVE --> PLAN --> DECISION
-        DECISION --> STRATEGY --> GATE --> SAFE --> COMPOSE
-    end
-
-    %% ---------- PAYMENT ----------
-    subgraph PAY["3 · PAYMENT & PROOF PLANE · Razorpay"]
-        direction LR
-        LOCK["Agreement<br/>Locked in DB"]:::trusted
-        CLICK["Buyer Clicks<br/>Pay"]:::human
-        REVAL["Server-Side<br/>Revalidation"]:::trusted
-        LINK["Razorpay Test<br/>Payment Link"]:::payment
-        CHECKOUT["Razorpay<br/>Checkout"]:::payment
-        WEBHOOK["Signed Webhook<br/>HMAC-SHA256"]:::proof
-        PAID["Canonical<br/>PAID State"]:::proof
-
-        LOCK --> CLICK --> REVAL --> LINK --> CHECKOUT --> WEBHOOK --> PAID
-    end
-
-    POLICY -.-> STRATEGY
-    POLICY -.-> GATE
-    SAFE --> LOCK
-```
+> **Authority Flow:** Merchant rules establish immutable policy → Buyer negotiates with LangGraph Agent → Deterministic Strategy & Financial Gates authorize proposals → Server atomically locks agreement → Razorpay executes payment → HMAC-SHA256 Webhook verifies final truth.
 
 ### The Cognitive Negotiation Loop
 
