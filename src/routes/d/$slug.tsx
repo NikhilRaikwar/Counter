@@ -81,6 +81,9 @@ function PublicBuyerPage() {
       setReturnState("verifying");
       try {
         const status = await counterApi.getPaymentStatus(capability);
+        if (status.amount_paise) {
+          setAgreedPrice(status.amount_paise / 100);
+        }
         if (status.status === "paid") {
           setPaymentState("paid");
           setReturnState("paid");
