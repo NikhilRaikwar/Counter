@@ -122,12 +122,44 @@ class OfferService:
         return offer
 
     @staticmethod
-    def _strategy(offer: Offer, payload: PolicyPublish) -> ConcessionStrategy:
-        strategy = payload.concession_strategy or ConcessionStrategy(
-            mode=ConcessionMode.HOLD_FIRM,
-            opening_counter_paise=offer.list_price_paise,
-            accept_buyer_offer_if_authorized=True,
+    def _default_concession_step(
+        max_discount_paise: int,
+        max_rounds: int,
+    ) -> int:
+        if max_discount_paise <= 0:
+            return 0
+        rounds = max(1, max_rounds)
+        per_round = (max_discount_paise + rounds - 1) // rounds
+        return min(
+            max_discount_paise,
+            max(10_000, per_round),
         )
+
+    @staticmethod
+    def _strategy(offer: Offer, payload: PolicyPublish) -> ConcessionStrategy:
+        strategy = payload.concession_strategy
+        if strategy is None:
+            if payload.max_discount_paise > 0:
+                strategy = ConcessionStrategy(
+                    mode=ConcessionMode.BUYER_MUST_IMPROVE,
+                    opening_counter_paise=offer.list_price_paise,
+                    min_buyer_improvement_paise=min(50_000, payload.max_discount_paise // 4),
+                    max_concession_per_round_paise=OfferService._default_concession_step(
+                        payload.max_discount_paise,
+                        payload.max_rounds,
+                    ),
+                    hold_on_repeat_offer=True,
+                    hold_on_worse_offer=True,
+                    accept_buyer_offer_if_authorized=True,
+                    hold_at_floor=True,
+                    allow_first_offer_concession=False,
+                )
+            else:
+                strategy = ConcessionStrategy(
+                    mode=ConcessionMode.HOLD_FIRM,
+                    opening_counter_paise=offer.list_price_paise,
+                    accept_buyer_offer_if_authorized=True,
+                )
         if strategy.opening_counter_paise is None:
             strategy = strategy.model_copy(update={"opening_counter_paise": offer.list_price_paise})
         if strategy.opening_counter_paise != offer.list_price_paise:

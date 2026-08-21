@@ -5,6 +5,7 @@ import { PublicBuyerHeader } from "@/components/buyer/PublicBuyerHeader";
 import { BuyerOfferCard } from "@/components/buyer/BuyerOfferCard";
 import { BuyerNegotiationChat } from "@/components/buyer/BuyerNegotiationChat";
 import { BuyerDealAgreedCard } from "@/components/buyer/BuyerDealAgreedCard";
+import { BuyerPaymentSuccessCard } from "@/components/buyer/BuyerPaymentSuccessCard";
 import { counterApi, CounterApiError } from "@/services/counter-api";
 import { getDealCapability, saveDealCapability } from "@/services/capability-store";
 import type { Message, Offer } from "@/types/product";
@@ -194,35 +195,29 @@ function PublicBuyerPage() {
       <PublicBuyerHeader merchantName={offer?.merchantName ?? "Counter Merchant"} />
       <main className="flex-1 flex flex-col items-center justify-center py-6">
         {error && <p className="mb-3 text-xs font-medium text-rose-700">{error}</p>}
-        {returnState !== "none" && (
+        {returnState === "paid" ? (
+          <BuyerPaymentSuccessCard offer={offer} paidAmount={agreedPrice} />
+        ) : returnState !== "none" ? (
           <div className="mx-4 w-full max-w-xl rounded-3xl border border-border bg-card p-8 text-center shadow-md">
-            {returnState === "paid" ? (
-              <CheckCircle2 className="mx-auto size-12 text-emerald-600" />
-            ) : (
-              <LoaderCircle className="mx-auto size-10 animate-spin text-amber-600" />
-            )}
+            <LoaderCircle className="mx-auto size-10 animate-spin text-amber-600" />
             <h1 className="mt-4 font-display text-3xl font-extrabold text-ink">
               {returnState === "returning"
                 ? "Returning from secure checkout…"
                 : returnState === "verifying"
                   ? "Verifying payment…"
-                  : returnState === "paid"
-                    ? "✓ Payment confirmed"
-                    : returnState === "missing-capability"
-                      ? "Payment was submitted."
-                      : "Payment confirmation is still pending."}
+                  : returnState === "missing-capability"
+                    ? "Payment was submitted."
+                    : "Payment confirmation is still pending."}
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              {returnState === "paid"
-                ? "Razorpay confirmed this payment. Your negotiated deal is complete."
-                : returnState === "missing-capability"
-                  ? "Return to the original Counter deal session to verify status."
-                  : returnState === "failed"
-                    ? "Counter could not confirm a final payment status yet. Please return to this deal later."
-                    : "Counter is checking the signed server-side payment record."}
+              {returnState === "missing-capability"
+                ? "Return to the original Counter deal session to verify status."
+                : returnState === "failed"
+                  ? "Counter could not confirm a final payment status yet. Please return to this deal later."
+                  : "Counter is checking the signed server-side payment record."}
             </p>
           </div>
-        )}
+        ) : null}
         {returnState === "none" && !offer && !error && (
           <p className="text-sm text-muted-foreground">Loading offer…</p>
         )}

@@ -112,3 +112,32 @@ def test_inactive_currency_mismatch_and_disallowed_action_fail() -> None:
         PolicyViolationCode.DEAL_NOT_ACTIVE,
         PolicyViolationCode.ACTION_NOT_ALLOWED,
     } <= codes(result)
+
+
+def test_max_rounds_allows_accept_clarify_refuse_and_price_hold() -> None:
+    p = policy(max_rounds=4)
+    # Deal with 4 commercial rounds already used
+    maxed_deal = deal(commercial_rounds_used=4, last_valid_counter_amount_paise=540_000)
+
+    # 1. ACCEPT of current offer is allowed
+    assert validate_decision(p, maxed_deal, decision("accept", 540_000)).allowed
+
+    # 2. CLARIFY is allowed
+    assert validate_decision(p, maxed_deal, decision("clarify")).allowed
+
+    # 3. REFUSE is allowed
+    assert validate_decision(p, maxed_deal, decision("refuse")).allowed
+
+    # 4. COUNTER holding the current offer is allowed
+    assert validate_decision(p, maxed_deal, decision("counter", 540_000)).allowed
+
+    # 5. NEW concession beyond max rounds is blocked
+    new_concession = validate_decision(p, maxed_deal, decision("counter", 520_000))
+    assert PolicyViolationCode.MAX_ROUNDS_EXCEEDED in codes(new_concession)
+    assert not new_concession.allowed
+
+    # 6. OFFER_BUNDLE beyond max rounds is blocked
+    bundle_concession = validate_decision(p, maxed_deal, decision("offer_bundle", 540_000, "strategy-call"))
+    assert PolicyViolationCode.MAX_ROUNDS_EXCEEDED in codes(bundle_concession)
+    assert not bundle_concession.allowed
+

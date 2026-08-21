@@ -40,6 +40,7 @@ class ConcessionStrategy(StrictPolicySchema):
     hold_on_worse_offer: bool = True
     accept_buyer_offer_if_authorized: bool = True
     hold_at_floor: bool = True
+    allow_first_offer_concession: bool = False
 
 
 class ExtractedBundle(StrictPolicySchema):

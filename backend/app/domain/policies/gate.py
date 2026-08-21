@@ -26,6 +26,8 @@ class PolicyViolationCode(StrEnum):
     CONCESSION_STEP_EXCEEDED = "concession_step_exceeded"
     ACCEPT_NOT_PERMITTED_BY_STRATEGY = "accept_not_permitted_by_strategy"
     ACCEPT_NOT_MATCHING_BUYER_OFFER = "accept_not_matching_buyer_offer"
+    ACTIVE_COUNTER_REQUIRED = "active_counter_required"
+    SELLER_COUNTER_BELOW_BUYER_OFFER = "seller_counter_below_buyer_offer"
 
 
 class MerchantPolicySnapshot(BaseModel):
@@ -49,7 +51,9 @@ class DealPolicyState(BaseModel):
     policy_version_id: str
     currency: str
     status: str
-    round: StrictInt
+    round: StrictInt = 0
+    commercial_rounds_used: StrictInt = 0
+    last_valid_counter_amount_paise: StrictInt | None = None
     agreement_locked: bool = False
 
 
@@ -89,9 +93,23 @@ def validate_decision(
         add(PolicyViolationCode.CURRENCY_MISMATCH)
     if deal.status != "negotiating" or deal.agreement_locked:
         add(PolicyViolationCode.DEAL_NOT_ACTIVE)
-    # The action at exactly max_rounds is allowed; max_rounds + 1 is blocked.
-    if deal.round > policy.max_rounds:
-        add(PolicyViolationCode.MAX_ROUNDS_EXCEEDED)
+
+    # Max rounds limits NEW CONCESSIONS (countering with a price concession or offering a bundle).
+    # It must NOT globally invalidate the deal or reject ACCEPT, REFUSE, CLARIFY, or price holds.
+    if decision.action in {AgentAction.COUNTER, AgentAction.OFFER_BUNDLE}:
+        current_offer = deal.last_valid_counter_amount_paise or policy.list_price_paise
+        is_new_concession = (
+            decision.action == AgentAction.OFFER_BUNDLE
+            or (
+                decision.proposed_amount_paise is not None
+                and decision.proposed_amount_paise < current_offer
+            )
+        )
+        if is_new_concession:
+            if deal.commercial_rounds_used >= policy.max_rounds or (
+                deal.commercial_rounds_used == 0 and deal.round > policy.max_rounds
+            ):
+                add(PolicyViolationCode.MAX_ROUNDS_EXCEEDED)
 
     required_authority = ACTION_AUTHORITY.get(decision.action)
     if required_authority is not None and required_authority not in policy.allowed_actions:

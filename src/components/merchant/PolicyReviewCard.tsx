@@ -22,7 +22,7 @@ type DraftData = {
   productName: string;
   description: string;
   listPrice: number;
-  image?: string;
+  image?: string | undefined;
   policy: MerchantPolicy;
   floorPricePaise: number;
   maxDiscountPaise: number;
@@ -33,7 +33,8 @@ export function PolicyReviewCard() {
   const router = useRouter();
   const [draft, setDraft] = useState<DraftData | null>(null);
   const [offerId, setOfferId] = useState<string | null>(null);
-  const [issues, setIssues] = useState<string[]>([]);
+  const [conflicts, setConflicts] = useState<string[]>([]);
+  const [warnings, setWarnings] = useState<string[]>([]);
   const [isPublishing, setIsPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,50 +42,77 @@ export function PolicyReviewCard() {
     const review = getPendingPolicyReview();
     if (!review) return;
     const extracted = review.extraction.draft;
+    const listPricePaise = review.offer.list_price_paise;
+    const floorPricePaise =
+      extracted.floor_price_paise ??
+      (extracted.max_discount_paise != null
+        ? Math.max(0, listPricePaise - extracted.max_discount_paise)
+        : listPricePaise);
+    const maxDiscountPaise =
+      extracted.max_discount_paise ?? Math.max(0, listPricePaise - floorPricePaise);
+    const maxRounds = extracted.max_rounds ?? 4;
+    const expiryMinutes = extracted.expiry_minutes ?? 30;
+    const allowedActions =
+      extracted.allowed_actions && extracted.allowed_actions.length > 0
+        ? extracted.allowed_actions
+        : ["negotiate_price", "offer_bundle", "accept_deal"];
+    const blockedActions =
+      extracted.forbidden_actions && extracted.forbidden_actions.length > 0
+        ? extracted.forbidden_actions
+        : ["price_below_floor", "invent_bundle", "change_product"];
+
     setOfferId(review.offer.id);
-    setIssues([
-      ...review.extraction.conflicts.map((item) => item.message),
+    setConflicts(review.extraction.conflicts.map((item) => item.message));
+    setWarnings([
       ...review.extraction.warnings,
-      ...review.extraction.missing_fields.map((item) => `Missing: ${item}`),
+      ...review.extraction.missing_fields.map((item) => `Field defaulted: ${item}`),
     ]);
     setDraft({
       productName: review.offer.product_name,
       description: review.offer.description,
-      listPrice: review.offer.list_price_paise / 100,
+      listPrice: listPricePaise / 100,
       image: review.offer.image_url ?? undefined,
       policy: {
-        floorPrice: (extracted.floor_price_paise ?? 0) / 100,
-        maxDiscount: (extracted.max_discount_paise ?? 0) / 100,
-        maxRounds: extracted.max_rounds ?? 0,
-        expiryMinutes: extracted.expiry_minutes ?? 0,
+        floorPrice: floorPricePaise / 100,
+        maxDiscount: maxDiscountPaise / 100,
+        maxRounds,
+        expiryMinutes,
         rawRules: review.rulesText,
         allowedBundles: extracted.allowed_bundles.map((item) => item.name),
-        allowedActions: extracted.allowed_actions,
-        blockedActions: extracted.forbidden_actions,
+        allowedActions,
+        blockedActions,
       },
-      floorPricePaise: extracted.floor_price_paise ?? 0,
-      maxDiscountPaise: extracted.max_discount_paise ?? 0,
+      floorPricePaise,
+      maxDiscountPaise,
       concessionStrategy: extracted.concession_strategy
         ? {
             ...extracted.concession_strategy,
             opening_counter_paise:
-              extracted.concession_strategy.opening_counter_paise ?? review.offer.list_price_paise,
+              extracted.concession_strategy.opening_counter_paise ?? listPricePaise,
           }
         : {
-            mode: "hold_firm",
-            opening_counter_paise: review.offer.list_price_paise,
-            min_buyer_improvement_paise: 0,
-            max_concession_per_round_paise: 0,
+            mode: maxDiscountPaise > 0 ? "buyer_must_improve" : "hold_firm",
+            opening_counter_paise: listPricePaise,
+            min_buyer_improvement_paise:
+              maxDiscountPaise > 0 ? Math.min(50000, Math.floor(maxDiscountPaise / 4)) : 0,
+            max_concession_per_round_paise:
+              maxDiscountPaise > 0
+                ? Math.min(
+                    maxDiscountPaise,
+                    Math.max(10000, Math.ceil(maxDiscountPaise / (maxRounds || 4))),
+                  )
+                : 0,
             hold_on_repeat_offer: true,
             hold_on_worse_offer: true,
             accept_buyer_offer_if_authorized: true,
             hold_at_floor: true,
+            allow_first_offer_concession: false,
           },
     });
   }, []);
 
   const handlePublish = async () => {
-    if (!draft || !offerId || issues.length > 0) return;
+    if (!draft || !offerId || conflicts.length > 0) return;
     const capability = getMerchantCapability(offerId);
     if (!capability) {
       setError("This browser no longer has the management key for this Counter link.");
@@ -191,11 +219,26 @@ export function PolicyReviewCard() {
                 </strong>
               </p>
               <p>
+                <span className="text-muted-foreground">First buyer offer</span>
+                <br />
+                <strong>
+                  {draft.concessionStrategy.mode === "hold_firm"
+                    ? "Hold firm"
+                    : draft.concessionStrategy.mode === "immediate"
+                      ? "May counter immediately within authority"
+                      : draft.concessionStrategy.allow_first_offer_concession
+                        ? "May counter if financially authorized"
+                        : "Hold — buyer must improve first"}
+                </strong>
+              </p>
+              <p>
                 <span className="text-muted-foreground">Buyer must improve before we discount</span>
                 <br />
                 <strong>
                   {draft.concessionStrategy.mode === "buyer_must_improve"
-                    ? "Yes"
+                    ? draft.concessionStrategy.allow_first_offer_concession
+                      ? "Yes — on subsequent turns"
+                      : "Yes"
                     : draft.concessionStrategy.mode === "immediate"
                       ? "No — merchant permits flexibility"
                       : "No — hold firm"}
@@ -250,14 +293,14 @@ export function PolicyReviewCard() {
                   ₹{draft.listPrice.toLocaleString("en-IN")}
                 </span>
               </div>
-              <div className="flex justify-between px-4 py-3 bg-emerald-50/60">
+              <div className="flex justify-between px-4 py-3">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-emerald-950 font-semibold">Lowest allowed price</span>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[0.65rem] font-bold">
-                    <Lock className="size-2.5" /> 🔒 Private
+                  <span className="text-muted-foreground font-medium">Private floor</span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-muted text-muted-foreground px-2 py-0.5 text-[0.65rem] font-bold">
+                    🔒 Private
                   </span>
                 </div>
-                <span className="font-bold text-emerald-700 text-base">
+                <span className="font-bold text-ink">
                   ₹{draft.policy.floorPrice.toLocaleString("en-IN")}
                 </span>
               </div>
@@ -270,6 +313,23 @@ export function PolicyReviewCard() {
                 </div>
                 <span className="font-bold text-ink">
                   ₹{draft.policy.maxDiscount.toLocaleString("en-IN")}
+                </span>
+              </div>
+              <div className="flex justify-between px-4 py-3 bg-emerald-50/60">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-emerald-950 font-semibold">
+                    Effective minimum authorized price
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[0.65rem] font-bold">
+                    <Lock className="size-2.5" /> 🔒 Private
+                  </span>
+                </div>
+                <span className="font-bold text-emerald-700 text-base">
+                  ₹
+                  {Math.max(
+                    draft.policy.floorPrice,
+                    draft.listPrice - draft.policy.maxDiscount,
+                  ).toLocaleString("en-IN")}
                 </span>
               </div>
               <div className="flex justify-between px-4 py-3">
@@ -319,10 +379,19 @@ export function PolicyReviewCard() {
           </div>
 
           {/* Action Buttons */}
-          {issues.length > 0 && (
+          {conflicts.length > 0 && (
             <div className="mt-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-800">
-              {issues.map((issue) => (
-                <p key={issue}>• {issue}</p>
+              <p className="font-semibold mb-1">Policy Conflicts to resolve:</p>
+              {conflicts.map((conflict) => (
+                <p key={conflict}>• {conflict}</p>
+              ))}
+            </div>
+          )}
+          {warnings.length > 0 && conflicts.length === 0 && (
+            <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50/50 p-4 text-xs text-amber-900">
+              <p className="font-semibold mb-1">Notes from rule interpretation:</p>
+              {warnings.map((warning) => (
+                <p key={warning}>• {warning}</p>
               ))}
             </div>
           )}
@@ -339,8 +408,8 @@ export function PolicyReviewCard() {
             <button
               type="button"
               onClick={handlePublish}
-              disabled={issues.length > 0 || isPublishing}
-              className="flex items-center justify-center gap-2 rounded-xl bg-amber px-7 py-3.5 text-sm font-bold text-amber-foreground shadow-xs transition-transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
+              disabled={conflicts.length > 0 || isPublishing}
+              className="flex items-center justify-center gap-2 rounded-xl bg-amber px-7 py-3.5 text-sm font-bold text-amber-foreground shadow-xs transition-transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isPublishing ? "Publishing…" : "Publish negotiable link"}{" "}
               <ArrowRight className="size-4" />

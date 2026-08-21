@@ -12,3 +12,5 @@ Allow: /
 
 User-agent: *
 Allow: /
+Allow: /llms.txt
+Allow: /llm.txt

@@ -31,7 +31,11 @@ from app.domain.policies.gate import (
     validate_decision,
 )
 from app.domain.policies.schemas import ConcessionStrategy
-from app.domain.policies.strategy import buyer_offer_from_text, validate_strategy
+from app.domain.policies.strategy import (
+    build_counter_directive,
+    buyer_offer_from_text,
+    validate_strategy,
+)
 from app.errors import ApplicationError
 from app.domain.offers.repository import OfferRepository
 from app.domain.offers.service import OfferService
@@ -106,8 +110,32 @@ class DealService:
             offer, policy = await self.repository.live_offer_and_policy_for_deal(deal)
             history = await self.repository.history(deal.id)
             policy_data = policy.policy_json
-            next_round = deal.current_round + 1
+            next_turn = deal.current_round + 1
             buyer_message_id = f"{deal.id}:{client_message_id}"
+            current_public_offer_paise = (
+                deal.last_valid_counter_amount_paise
+                or policy.list_price_paise
+            )
+            can_make_new_concession = deal.commercial_rounds_used < policy.max_rounds
+
+            buyer_offer = buyer_offer_from_text(buyer_text)
+            strategy = ConcessionStrategy.model_validate(
+                policy_data.get("concession_strategy")
+                or {"opening_counter_paise": policy.list_price_paise}
+            )
+            directive = build_counter_directive(
+                strategy,
+                buyer_offer_paise=buyer_offer,
+                best_buyer_offer_paise=deal.best_buyer_offer_paise,
+                last_buyer_offer_paise=deal.last_buyer_offer_paise,
+                current_public_offer_paise=current_public_offer_paise,
+                list_price_paise=policy.list_price_paise,
+                floor_price_paise=policy.floor_price_paise,
+                max_discount_paise=policy.max_discount_paise,
+                can_make_new_concession=can_make_new_concession,
+                negotiate_price_allowed="negotiate_price" in (policy_data.get("allowed_actions") or []),
+            )
+
             negotiation = NegotiationContext(
                 product_name=offer.product_name,
                 description=offer.description,
@@ -118,44 +146,23 @@ class DealService:
                 max_rounds=policy.max_rounds,
                 allowed_bundles=policy_data.get("allowed_bundles", []),
                 concession_strategy=policy_data.get("concession_strategy", {}),
+                buyer_offer_paise=buyer_offer,
                 best_buyer_offer_paise=deal.best_buyer_offer_paise,
                 last_buyer_offer_paise=deal.last_buyer_offer_paise,
-                current_round=next_round,
+                current_round=next_turn,
+                commercial_rounds_used=deal.commercial_rounds_used,
+                current_public_offer_paise=current_public_offer_paise,
+                can_make_new_concession=can_make_new_concession,
                 last_counter_amount_paise=deal.last_counter_amount_paise,
+                active_counter_required=directive.active_counter_required,
+                recommended_counter_paise=directive.recommended_counter_paise,
+                concession_reason=directive.reason,
                 history=[
                     {"sequence": item.sequence, "role": item.sender.value, "content": item.text}
                     for item in history
                 ],
                 buyer_message=buyer_text,
             )
-            state = {
-                "deal_id": deal.id,
-                "offer_id": deal.offer_id,
-                "policy_version_id": deal.policy_version_id,
-                "buyer_message_id": buyer_message_id,
-                "round": next_round,
-                "last_counter_amount_paise": deal.last_counter_amount_paise,
-            }
-            runtime = GraphRuntimeContext(
-                model=self.model,
-                negotiation=negotiation,
-                history_message_ids=[item.id for item in history],
-            )
-            try:
-                result = await self.graph.ainvoke(
-                    state,
-                    config={"configurable": {"thread_id": deal.id}},
-                    context=runtime,
-                )
-            except NegotiationFailure as exc:
-                raise ApplicationError(
-                    "negotiation_unavailable",
-                    "Negotiation is temporarily unavailable; the turn was not recorded",
-                    503,
-                ) from exc
-
-            decision_data = result["decision"]
-            decision = AgentDecision.model_validate(decision_data)
             policy_snapshot = MerchantPolicySnapshot(
                 id=policy.id,
                 offer_id=policy.offer_id,
@@ -172,46 +179,77 @@ class DealService:
                 policy_version_id=deal.policy_version_id,
                 currency=offer.currency,
                 status=deal.status.value,
-                round=next_round,
+                round=deal.commercial_rounds_used + 1,
+                commercial_rounds_used=deal.commercial_rounds_used,
+                last_valid_counter_amount_paise=deal.last_valid_counter_amount_paise,
                 agreement_locked=deal.agreement_locked_at is not None,
             )
-            validation = validate_decision(policy_snapshot, deal_state, decision)
-            buyer_offer = buyer_offer_from_text(buyer_text)
-            strategy = ConcessionStrategy.model_validate(
-                policy_data.get("concession_strategy")
-                or {"opening_counter_paise": policy.list_price_paise}
-            )
-            strategy_violation = validate_strategy(
-                strategy,
-                decision,
-                buyer_offer_paise=buyer_offer,
-                best_buyer_offer_paise=deal.best_buyer_offer_paise,
-                last_buyer_offer_paise=deal.last_buyer_offer_paise,
-                last_counter_amount_paise=deal.last_valid_counter_amount_paise,
-            )
-            if strategy_violation:
-                from app.domain.policies.gate import PolicyViolationCode
 
-                validation = validation.model_copy(
-                    update={
-                        "allowed": False,
-                        "violations": tuple(
-                            list(validation.violations)
-                            + [PolicyViolationCode(strategy_violation)]
-                        ),
-                        "validated_amount_paise": None,
-                        "validated_bundle_id": None,
-                    }
+            state = {
+                "deal_id": deal.id,
+                "offer_id": deal.offer_id,
+                "policy_version_id": deal.policy_version_id,
+                "buyer_message_id": buyer_message_id,
+                "buyer_message": buyer_text,
+                "buyer_offer_paise": buyer_offer,
+                "round": next_turn,
+                "commercial_rounds_used": deal.commercial_rounds_used,
+                "last_counter_amount_paise": deal.last_counter_amount_paise,
+                "best_buyer_offer_paise": deal.best_buyer_offer_paise,
+                "last_buyer_offer_paise": deal.last_buyer_offer_paise,
+                "current_public_offer_paise": current_public_offer_paise,
+                "can_make_new_concession": can_make_new_concession,
+            }
+            runtime = GraphRuntimeContext(
+                model=self.model,
+                negotiation=negotiation,
+                history_message_ids=[item.id for item in history],
+                policy_snapshot=policy_snapshot,
+                deal_policy_state=deal_state,
+                concession_strategy=strategy,
+                buyer_offer_paise=buyer_offer,
+                max_replan_attempts=2,
+            )
+            try:
+                result = await self.graph.ainvoke(
+                    state,
+                    config={"configurable": {"thread_id": deal.id}},
+                    context=runtime,
                 )
-            response_text = self._render_buyer_response(decision, validation, policy_snapshot)
-            if strategy_violation:
-                # A hold is a buyer-safe public outcome: it states only the
-                # already-public seller position, never the private reason,
-                # floor, movement threshold, or remaining authority.
-                held_amount = deal.last_valid_counter_amount_paise or strategy.opening_counter_paise
-                if held_amount is not None:
-                    response_text = f"My current offer is still {self._format_inr(held_amount)}."
-            public_candidate = self._public_candidate(decision, validation)
+            except NegotiationFailure as exc:
+                raise ApplicationError(
+                    "negotiation_unavailable",
+                    "Negotiation is temporarily unavailable; the turn was not recorded",
+                    503,
+                ) from exc
+
+            decision_data = result["decision"]
+            decision = AgentDecision.model_validate(decision_data)
+            safe_outcome_data = result.get("safe_outcome", {})
+            response_text = result.get("response_text", "")
+            events = result.get("events", [])
+            attempts = result.get("attempts", [])
+            replan_count = result.get("replan_count", 0)
+            validation_passed = safe_outcome_data.get("validation_passed", False)
+            validated_amount_paise = safe_outcome_data.get("validated_amount_paise")
+
+            final_candidate = attempts[-1]["candidate"] if attempts else decision.model_dump(mode="json")
+            if not validation_passed:
+                public_candidate = {
+                    "action": "refuse",
+                    "amount_paise": None,
+                    "bundle_id": None,
+                    "validation_status": "failed",
+                    "violation_codes": safe_outcome_data.get("violations", []),
+                }
+            else:
+                public_candidate = {
+                    "action": decision.action.value,
+                    "amount_paise": validated_amount_paise,
+                    "bundle_id": decision.bundle_id,
+                    "validation_status": "passed",
+                    "violation_codes": [],
+                }
             first_sequence = await self.repository.next_sequence(deal.id)
             buyer_message = DealMessage(
                 deal_id=deal.id,
@@ -227,42 +265,67 @@ class DealService:
                 sender=MessageSender.COUNTER,
                 text=response_text,
                 metadata_json={
-                    "events": [
-                        "candidate_proposed",
-                        "policy_check_started",
-                        "policy_check_passed" if validation.allowed else "policy_check_failed",
-                        *(["agreement_locked"] if validation.allowed and decision.action == AgentAction.ACCEPT else []),
-                        "counter_response_generated",
-                    ],
+                    "events": events,
                     "candidate": {
                         "action": decision.action.value,
                         "amount_paise": decision.proposed_amount_paise,
                         "bundle_id": decision.bundle_id,
-                        "validation_status": "passed" if validation.allowed else "failed",
-                        "violation_codes": [code.value for code in validation.violations],
+                        "validation_status": "passed" if validation_passed else "failed",
+                        "violation_codes": safe_outcome_data.get("violations", []),
                     },
                     "public_candidate": public_candidate,
+                    "attempts": attempts,
+                    "replan_count": replan_count,
+                    "buyer_intent": result.get("buyer_intent"),
+                    "strategy": result.get("strategy"),
+                    "safe_outcome": safe_outcome_data,
                     "model": result.get("model_metadata", {}),
                 },
             )
             self.session.add_all([buyer_message, counter_message])
-            deal.current_round = next_round
-            deal.commercial_rounds_used = next_round
-            deal.last_buyer_offer_paise = buyer_offer
-            if buyer_offer is not None and (deal.best_buyer_offer_paise is None or buyer_offer > deal.best_buyer_offer_paise):
-                deal.best_buyer_offer_paise = buyer_offer
-            deal.candidate_action = decision.action.value
-            deal.candidate_amount_paise = decision.proposed_amount_paise
-            deal.candidate_bundle_id = decision.bundle_id
-            deal.candidate_validation_status = "passed" if validation.allowed else "failed"
-            deal.candidate_violation_codes = [code.value for code in validation.violations]
-            if validation.allowed and decision.action == AgentAction.COUNTER:
-                deal.last_counter_amount_paise = validation.validated_amount_paise
-                deal.last_valid_counter_amount_paise = validation.validated_amount_paise
-            if validation.allowed and decision.action == AgentAction.ACCEPT:
-                # Re-run immediately before locking inside this BEGIN IMMEDIATE transaction.
+            deal.current_round = next_turn
+
+            # Only increment commercial_rounds_used when a NEW valid seller concession occurred
+            if validation_passed:
+                if decision.action == AgentAction.COUNTER:
+                    if (
+                        validated_amount_paise is not None
+                        and validated_amount_paise < current_public_offer_paise
+                    ):
+                        deal.commercial_rounds_used += 1
+                elif decision.action == AgentAction.OFFER_BUNDLE:
+                    deal.commercial_rounds_used += 1
+
+            if buyer_offer is not None:
+                deal.last_buyer_offer_paise = buyer_offer
+                if deal.best_buyer_offer_paise is None or buyer_offer > deal.best_buyer_offer_paise:
+                    deal.best_buyer_offer_paise = buyer_offer
+
+            deal.candidate_action = final_candidate.get("action")
+            deal.candidate_amount_paise = final_candidate.get("proposed_amount_paise")
+            deal.candidate_bundle_id = final_candidate.get("bundle_id")
+            deal.candidate_validation_status = "passed" if validation_passed else "failed"
+            deal.candidate_violation_codes = safe_outcome_data.get("violations", [])
+            if validation_passed and decision.action == AgentAction.COUNTER:
+                deal.last_counter_amount_paise = validated_amount_paise
+                deal.last_valid_counter_amount_paise = validated_amount_paise
+            if validation_passed and decision.action == AgentAction.ACCEPT:
+                # Re-run immediately before locking inside this transaction.
                 lock_check = validate_decision(policy_snapshot, deal_state, decision)
-                if not lock_check.allowed:
+                lock_check_strategy = validate_strategy(
+                    strategy,
+                    decision,
+                    buyer_offer_paise=buyer_offer,
+                    best_buyer_offer_paise=deal.best_buyer_offer_paise,
+                    last_buyer_offer_paise=deal.last_buyer_offer_paise,
+                    last_counter_amount_paise=deal.last_counter_amount_paise,
+                    list_price_paise=policy.list_price_paise,
+                    floor_price_paise=policy.floor_price_paise,
+                    max_discount_paise=policy.max_discount_paise,
+                    can_make_new_concession=can_make_new_concession,
+                    negotiate_price_allowed="negotiate_price" in policy_snapshot.allowed_actions,
+                )
+                if not lock_check.allowed or lock_check_strategy is not None:
                     raise ApplicationError("agreement_conflict", "Agreement could not be locked", 409)
                 deal.status = DealStatus.AGREED
                 deal.accepted_amount_paise = lock_check.validated_amount_paise
@@ -295,20 +358,67 @@ class DealService:
         decision: AgentDecision,
         validation: PolicyValidationResult,
         policy: MerchantPolicySnapshot,
+        *,
+        current_public_offer_paise: int,
+        commercial_rounds_used: int,
+        max_rounds: int,
     ) -> str:
+        current_formatted = cls._format_inr(current_public_offer_paise)
         if not validation.allowed:
-            return "I can't authorize that deal, but I can continue within the seller's approved terms."
+            from app.domain.policies.gate import PolicyViolationCode
+
+            violations = set(validation.violations)
+
+            # 1. Below floor or excessive discount acceptance attempt by model
+            if (
+                PolicyViolationCode.PRICE_BELOW_FLOOR in violations
+                or PolicyViolationCode.DISCOUNT_EXCEEDS_LIMIT in violations
+            ):
+                if decision.action == AgentAction.ACCEPT:
+                    return f"I can't agree to that price. My current offer remains {current_formatted}."
+                return f"My current offer is still {current_formatted}."
+
+            # 2. Max rounds exceeded (concession blocked because at max rounds)
+            if PolicyViolationCode.MAX_ROUNDS_EXCEEDED in violations:
+                return f"My current offer remains {current_formatted}. I can lock that in if it works for you."
+
+            # 3. Buyer offer not improved / improvement required / hold firm
+            if (
+                PolicyViolationCode.BUYER_OFFER_NOT_IMPROVED in violations
+                or PolicyViolationCode.BUYER_IMPROVEMENT_REQUIRED in violations
+                or PolicyViolationCode.CONCESSION_NOT_PERMITTED in violations
+                or PolicyViolationCode.CONCESSION_STEP_EXCEEDED in violations
+            ):
+                return f"My current offer is still {current_formatted}."
+
+            # 4. Accept not permitted by strategy / not matching buyer offer
+            if PolicyViolationCode.ACCEPT_NOT_MATCHING_BUYER_OFFER in violations:
+                return f"My current offer is still {current_formatted}."
+            if PolicyViolationCode.ACCEPT_NOT_PERMITTED_BY_STRATEGY in violations:
+                return f"I can't agree to that price. My current offer remains {current_formatted}."
+
+            # 5. Stale policy, deal inactive
+            if PolicyViolationCode.DEAL_NOT_ACTIVE in violations:
+                return "This deal is no longer active."
+
+            # Default safe fallback
+            return f"My current offer is still {current_formatted}."
+
         if decision.action == AgentAction.COUNTER:
+            if validation.validated_amount_paise == current_public_offer_paise:
+                return f"My current offer is {cls._format_inr(validation.validated_amount_paise)}."
             return f"I can do {cls._format_inr(validation.validated_amount_paise)}."
         if decision.action == AgentAction.ACCEPT:
             return f"Deal. {cls._format_inr(validation.validated_amount_paise)}."
         if decision.action == AgentAction.OFFER_BUNDLE:
             bundle = next(
-                item for item in policy.allowed_bundles if item.get("id") == validation.validated_bundle_id
+                (item for item in policy.allowed_bundles if item.get("id") == validation.validated_bundle_id),
+                None,
             )
+            bundle_name = bundle["name"] if bundle else "an approved bundle"
             return (
                 f"I can offer {cls._format_inr(validation.validated_amount_paise)} "
-                f"with {bundle['name']}."
+                f"with {bundle_name}."
             )
         return cls._buyer_safe_text(decision.message)
 

@@ -29,12 +29,23 @@ DEAL_HEADER = "X-Counter-Deal-Capability"
 
 
 class FakeNegotiationModel:
-    def __init__(self, decisions: list[AgentDecision] | None = None, *, fail: bool = False, delay: float = 0) -> None:
-        self.decisions = decisions or []
+    def __init__(
+        self,
+        decisions: list[AgentDecision] | None = None,
+        *,
+        fail: bool = False,
+        delay: float = 0,
+        responses: list[str] | None = None,
+        pop_on_replan: bool = False,
+    ) -> None:
+        self.decisions = list(decisions or [])
+        self.responses = list(responses or [])
         self.fail = fail
         self.delay = delay
+        self.pop_on_replan = pop_on_replan
         self.contexts = []
         self.calls = 0
+        self.last_decision: AgentDecision | None = None
 
     async def propose(self, context):
         self.calls += 1
@@ -43,11 +54,39 @@ class FakeNegotiationModel:
             await asyncio.sleep(self.delay)
         if self.fail:
             raise NegotiationFailure("private provider failure")
-        if not self.decisions:
-            raise AssertionError("Fake model has no remaining decision")
+        if self.pop_on_replan and self.decisions:
+            decision = self.decisions.pop(0)
+            self.last_decision = decision
+        elif context.replan_feedback:
+            decision = self.last_decision or AgentDecision(
+                action="counter",
+                proposed_amount_paise=context.current_public_offer_paise or context.list_price_paise,
+                message=f"My current offer is still ₹{(context.current_public_offer_paise or context.list_price_paise) // 100:,}.",
+            )
+        elif self.decisions:
+            decision = self.decisions.pop(0)
+            self.last_decision = decision
+        elif self.last_decision is not None:
+            decision = self.last_decision
+        else:
+            current_offer = context.current_public_offer_paise or context.list_price_paise
+            decision = AgentDecision(
+                action="counter",
+                proposed_amount_paise=current_offer,
+                message=f"My current offer is still ₹{current_offer // 100:,}.",
+            )
         return NegotiationProposal(
-            decision=self.decisions.pop(0),
+            decision=decision,
             metadata=NegotiationMetadata(model="fake", latency_ms=1),
+        )
+
+    async def compose(self, context, safe_outcome):
+        if self.responses:
+            return self.responses.pop(0)
+        from app.agents.safety import ResponseSafetyValidator
+        return ResponseSafetyValidator.fallback_response(
+            safe_outcome,
+            current_public_offer_paise=context.current_public_offer_paise or context.list_price_paise,
         )
 
 
@@ -443,6 +482,238 @@ def test_openapi_and_public_response_do_not_expose_private_policy(negotiation_ap
     assert "/api/public/offers/{slug}/deals" in openapi
     assert "/api/public/deals/messages" in openapi
     assert "X-Counter-Deal-Capability" in openapi
+
+
+def test_conversation_turns_separated_from_commercial_concession_rounds(tmp_path) -> None:
+    db_path = tmp_path / "rounds.db"
+    settings = Settings(
+        database_url=migrated_database(db_path),
+        langgraph_checkpoint_path=str(tmp_path / "rounds-graph.db"),
+        _env_file=None,
+    )
+    decisions = [
+        AgentDecision(action="clarify", message="What specific scope do you need?"),
+        AgentDecision(action="counter", proposed_amount_paise=2_000_000, message="My current offer is ₹20,000."),
+        AgentDecision(action="counter", proposed_amount_paise=2_000_000, message="My current offer is still ₹20,000."),
+        AgentDecision(action="counter", proposed_amount_paise=2_000_000, message="My current offer is still ₹20,000."),
+        AgentDecision(action="counter", proposed_amount_paise=1_850_000, message="I can do ₹18,500."),
+        AgentDecision(action="clarify", message="I can confirm all features are included."),
+        AgentDecision(action="counter", proposed_amount_paise=1_800_000, message="I can do ₹18,000."),
+        AgentDecision(action="accept", proposed_amount_paise=1_800_000, message="Deal. ₹18,000."),
+    ]
+    model = FakeNegotiationModel(decisions)
+    with TestClient(create_app(settings, negotiation_model=model)) as client:
+        _, _, slug = published_offer(client)
+        capability = start_deal(client, slug)
+
+        # 1. Non-price message / clarify
+        r1 = turn(client, capability, "what is included?", "t1")
+        assert r1.status_code == 200
+
+        conn = sqlite3.connect(db_path)
+        try:
+            curr_rnd, comm_rnd = conn.execute("SELECT current_round, commercial_rounds_used FROM deals").fetchone()
+            assert curr_rnd == 1
+            assert comm_rnd == 0
+
+            # 2. First explicit buyer offer (hold list price)
+            r2 = turn(client, capability, "₹17,000", "t2")
+            assert r2.status_code == 200
+            curr_rnd, comm_rnd = conn.execute("SELECT current_round, commercial_rounds_used FROM deals").fetchone()
+            assert curr_rnd == 2
+            assert comm_rnd == 0
+
+            # 3. Repeated buyer offer (holding)
+            r3 = turn(client, capability, "₹17,000 again", "t3")
+            assert r3.status_code == 200
+            curr_rnd, comm_rnd = conn.execute("SELECT current_round, commercial_rounds_used FROM deals").fetchone()
+            assert curr_rnd == 3
+            assert comm_rnd == 0
+
+            # 4. Worse buyer offer (holding)
+            r4 = turn(client, capability, "Actually ₹16,000", "t4")
+            assert r4.status_code == 200
+            curr_rnd, comm_rnd = conn.execute("SELECT current_round, commercial_rounds_used FROM deals").fetchone()
+            assert curr_rnd == 4
+            assert comm_rnd == 0
+
+            # 5. Meaningful improvement from buyer (₹17,500) -> seller concedes to ₹18,500
+            r5 = turn(client, capability, "I can do ₹17,500", "t5")
+            assert r5.status_code == 200
+            curr_rnd, comm_rnd = conn.execute("SELECT current_round, commercial_rounds_used FROM deals").fetchone()
+            assert curr_rnd == 5
+            assert comm_rnd == 1
+
+            # 6. Clarification after concession
+            r6 = turn(client, capability, "Is onboarding included?", "t6")
+            assert r6.status_code == 200
+            curr_rnd, comm_rnd = conn.execute("SELECT current_round, commercial_rounds_used FROM deals").fetchone()
+            assert curr_rnd == 6
+            assert comm_rnd == 1
+
+            # 7. Buyer improves to ₹18,000 -> seller concedes to ₹18,000
+            r7 = turn(client, capability, "How about ₹18,000?", "t7")
+            assert r7.status_code == 200
+            curr_rnd, comm_rnd = conn.execute("SELECT current_round, commercial_rounds_used FROM deals").fetchone()
+            assert curr_rnd == 7
+            assert comm_rnd == 2
+
+            # 8. Buyer accepts: "okay confirm this deal" (no price in text) -> ACCEPT current public offer (₹18,000)
+            r8 = turn(client, capability, "okay confirm this deal", "t8")
+            assert r8.status_code == 200
+            assert r8.json()["deal_status"] == "agreed"
+            curr_rnd, comm_rnd, status, accepted_amt = conn.execute(
+                "SELECT current_round, commercial_rounds_used, status, accepted_amount_paise FROM deals"
+            ).fetchone()
+            assert curr_rnd == 8
+            assert comm_rnd == 2
+            assert status == "AGREED"
+            assert accepted_amt == 1_800_000
+
+            payment_count = conn.execute("SELECT count(*) FROM payment_executions").fetchone()[0]
+            assert payment_count == 0
+        finally:
+            conn.close()
+
+
+def test_buyer_can_accept_current_offer_at_opening_price_without_concessions(tmp_path) -> None:
+    db_path = tmp_path / "accept_opening.db"
+    settings = Settings(
+        database_url=migrated_database(db_path),
+        langgraph_checkpoint_path=str(tmp_path / "accept-opening-graph.db"),
+        _env_file=None,
+    )
+    decisions = [
+        AgentDecision(action="counter", proposed_amount_paise=2_000_000, message="My current offer is still ₹20,000."),
+        AgentDecision(action="accept", proposed_amount_paise=2_000_000, message="Deal. ₹20,000."),
+    ]
+    model = FakeNegotiationModel(decisions)
+    with TestClient(create_app(settings, negotiation_model=model)) as client:
+        _, _, slug = published_offer(client)
+        capability = start_deal(client, slug)
+
+        r1 = turn(client, capability, "₹17,000", "t1")
+        assert r1.status_code == 200
+
+        r2 = turn(client, capability, "okay confirm this deal", "t2")
+        assert r2.status_code == 200
+        assert r2.json()["deal_status"] == "agreed"
+
+        conn = sqlite3.connect(db_path)
+        try:
+            status, accepted_amt, comm_rnd = conn.execute(
+                "SELECT status, accepted_amount_paise, commercial_rounds_used FROM deals"
+            ).fetchone()
+            assert status == "AGREED"
+            assert accepted_amt == 2_000_000
+            assert comm_rnd == 0
+        finally:
+            conn.close()
+
+
+def test_yes_after_clarification_accepts_canonical_offer_and_refuse_does_not_consume_round(tmp_path) -> None:
+    db_path = tmp_path / "yes_clarify.db"
+    settings = Settings(
+        database_url=migrated_database(db_path),
+        langgraph_checkpoint_path=str(tmp_path / "yes-clarify-graph.db"),
+        _env_file=None,
+    )
+    decisions = [
+        AgentDecision(action="refuse", message="I cannot go below the approved range."),
+        AgentDecision(action="clarify", message="Would you like to lock in ₹20,000 for SEO Audit Pro?"),
+        AgentDecision(action="accept", proposed_amount_paise=2_000_000, message="Deal. ₹20,000."),
+    ]
+    model = FakeNegotiationModel(decisions)
+    with TestClient(create_app(settings, negotiation_model=model)) as client:
+        _, _, slug = published_offer(client)
+        capability = start_deal(client, slug)
+
+        # 1. Refuse
+        r1 = turn(client, capability, "₹10,000", "t1")
+        assert r1.status_code == 200
+
+        conn = sqlite3.connect(db_path)
+        try:
+            curr_rnd, comm_rnd = conn.execute("SELECT current_round, commercial_rounds_used FROM deals").fetchone()
+            assert curr_rnd == 1
+            assert comm_rnd == 0  # REFUSE did not increment commercial_rounds_used
+
+            # 2. Clarification asking for confirmation
+            r2 = turn(client, capability, "Can we confirm?", "t2")
+            assert r2.status_code == 200
+            curr_rnd, comm_rnd = conn.execute("SELECT current_round, commercial_rounds_used FROM deals").fetchone()
+            assert curr_rnd == 2
+            assert comm_rnd == 0
+
+            # 3. Buyer says "yes" -> ACCEPT canonical current offer
+            r3 = turn(client, capability, "yes", "t3")
+            assert r3.status_code == 200
+            assert r3.json()["deal_status"] == "agreed"
+            status, accepted_amt, comm_rnd = conn.execute(
+                "SELECT status, accepted_amount_paise, commercial_rounds_used FROM deals"
+            ).fetchone()
+            assert status == "AGREED"
+            assert accepted_amt == 2_000_000
+            assert comm_rnd == 0
+        finally:
+            conn.close()
+
+
+def test_max_concessions_reached_allows_accept_of_final_offer(tmp_path) -> None:
+    db_path = tmp_path / "max_rounds.db"
+    settings = Settings(
+        database_url=migrated_database(db_path),
+        langgraph_checkpoint_path=str(tmp_path / "max-rounds-graph.db"),
+        _env_file=None,
+    )
+    # 4 concessions: 1.95M, 1.90M, 1.85M, 1.80M (policy max_rounds = 4)
+    # Turn 5: buyer tries lower -> blocked/hold -> "My current offer remains ₹18,000."
+    # Turn 6: buyer accepts -> "Deal. ₹18,000."
+    decisions = [
+        AgentDecision(action="counter", proposed_amount_paise=1_950_000, message="I can do ₹19,500."),
+        AgentDecision(action="counter", proposed_amount_paise=1_900_000, message="I can do ₹19,000."),
+        AgentDecision(action="counter", proposed_amount_paise=1_850_000, message="I can do ₹18,500."),
+        AgentDecision(action="counter", proposed_amount_paise=1_800_000, message="I can do ₹18,000."),
+        AgentDecision(action="counter", proposed_amount_paise=1_750_000, message="I can do ₹17,500."),  # Attempt 5th concession (exceeds max_rounds 4)
+        AgentDecision(action="accept", proposed_amount_paise=1_800_000, message="Deal. ₹18,000."),  # Buyer agrees to ₹18,000
+    ]
+    model = FakeNegotiationModel(decisions)
+    with TestClient(create_app(settings, negotiation_model=model)) as client:
+        _, _, slug = published_offer(client)
+        capability = start_deal(client, slug)
+
+        turn(client, capability, "₹17,000", "t1")
+        turn(client, capability, "₹17,200", "t2")
+        turn(client, capability, "₹17,400", "t3")
+        turn(client, capability, "₹17,600", "t4")
+
+        conn = sqlite3.connect(db_path)
+        try:
+            curr_rnd, comm_rnd = conn.execute("SELECT current_round, commercial_rounds_used FROM deals").fetchone()
+            assert curr_rnd == 4
+            assert comm_rnd == 4  # 4 concessions used
+
+            # Turn 5: Model attempts 5th concession -> Gate blocks it with MAX_ROUNDS_EXCEEDED, safe hold response returned
+            r5 = turn(client, capability, "Can you do even less?", "t5")
+            assert r5.status_code == 200
+            assert "My current offer remains ₹18,000" in r5.json()["message"]["content"]
+            curr_rnd, comm_rnd = conn.execute("SELECT current_round, commercial_rounds_used FROM deals").fetchone()
+            assert curr_rnd == 5
+            assert comm_rnd == 4  # still 4
+
+            # Turn 6: Buyer accepts final offer
+            r6 = turn(client, capability, "Okay I accept ₹18,000", "t6")
+            assert r6.status_code == 200
+            assert r6.json()["deal_status"] == "agreed"
+            status, accepted_amt, comm_rnd = conn.execute(
+                "SELECT status, accepted_amount_paise, commercial_rounds_used FROM deals"
+            ).fetchone()
+            assert status == "AGREED"
+            assert accepted_amt == 1_800_000
+            assert comm_rnd == 4
+        finally:
+            conn.close()
+
 
 
 @pytest.mark.skipif(
