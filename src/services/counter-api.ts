@@ -139,6 +139,25 @@ export type PublicOffer = {
   status: "live";
 };
 
+export type DealTelemetry = {
+  deal_id: string;
+  available: boolean;
+  turns_count: number;
+  total_cost_usd?: number;
+  total_cost_inr?: number;
+  total_tokens?: number;
+  avg_latency_ms?: number;
+  planner_ttft_ms?: number;
+  composer_latency_ms?: number;
+  gate_validation_ms?: number;
+  message?: string;
+  spans?: Array<{
+    name: string;
+    duration_ms: number;
+    attributes?: Record<string, unknown>;
+  }>;
+};
+
 export class CounterApiError extends Error {
   constructor(
     public readonly status: number,
@@ -252,6 +271,10 @@ export class CounterApiClient {
       `/api/offers/${encodeURIComponent(offerId)}/deals/${encodeURIComponent(dealId)}`,
       { headers: this.capabilityHeader(capability) },
     );
+  }
+
+  async getDealTelemetry(dealId: string) {
+    return this.request<DealTelemetry>(`/api/deals/${encodeURIComponent(dealId)}/telemetry`);
   }
 
   private capabilityHeader(capability: string): HeadersInit {

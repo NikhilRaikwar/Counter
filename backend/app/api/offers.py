@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -129,3 +129,11 @@ async def get_merchant_deal(
     offer_id: str, deal_id: str, session: Session, capability: Capability = None
 ) -> MerchantDealDetailResponse:
     return await MerchantDealReadService(session).detail(offer_id, deal_id, capability)
+
+
+@router.get("/deals/{deal_id}/telemetry")
+async def get_deal_telemetry_endpoint(deal_id: str) -> dict[str, Any]:
+    from app.observability.tracing import get_deal_telemetry
+
+    return get_deal_telemetry(deal_id)
+

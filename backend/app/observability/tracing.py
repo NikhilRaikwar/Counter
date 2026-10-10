@@ -71,18 +71,11 @@ def record_turn_trace(trace: TurnTrace) -> None:
 def get_deal_telemetry(deal_id: str) -> dict[str, Any]:
     traces = _DEAL_TRACES.get(deal_id, [])
     if not traces:
-        # Return fallback baseline based on active deal state
         return {
             "deal_id": deal_id,
+            "available": False,
             "turns_count": 0,
-            "total_cost_usd": 0.00012,
-            "total_cost_inr": 0.01,
-            "total_tokens": 420,
-            "avg_latency_ms": 680,
-            "planner_ttft_ms": 340,
-            "composer_latency_ms": 320,
-            "gate_validation_ms": 1.4, # Gate <2ms proof
-            "spans": [],
+            "message": "Telemetry unavailable (no active Phoenix trace or turns recorded)",
         }
 
     total_tokens = sum(t.total_tokens for t in traces)
@@ -106,12 +99,13 @@ def get_deal_telemetry(deal_id: str) -> dict[str, Any]:
             elif "compose" in s.name.lower():
                 composer_latencies.append(s.duration_ms)
 
-    avg_gate_ms = sum(gate_latencies) / len(gate_latencies) if gate_latencies else 1.2
-    avg_planner_ms = sum(planner_latencies) / len(planner_latencies) if planner_latencies else 350.0
-    avg_composer_ms = sum(composer_latencies) / len(composer_latencies) if composer_latencies else 310.0
+    avg_gate_ms = sum(gate_latencies) / len(gate_latencies) if gate_latencies else 0.0
+    avg_planner_ms = sum(planner_latencies) / len(planner_latencies) if planner_latencies else 0.0
+    avg_composer_ms = sum(composer_latencies) / len(composer_latencies) if composer_latencies else 0.0
 
     return {
         "deal_id": deal_id,
+        "available": True,
         "turns_count": len(traces),
         "total_cost_usd": round(total_cost_usd, 6),
         "total_cost_inr": round(total_cost_inr, 4),
@@ -119,7 +113,7 @@ def get_deal_telemetry(deal_id: str) -> dict[str, Any]:
         "avg_latency_ms": round(avg_latency, 1),
         "planner_ttft_ms": round(avg_planner_ms, 1),
         "composer_latency_ms": round(avg_composer_ms, 1),
-        "gate_validation_ms": round(avg_gate_ms, 2), # Validates gate < 2ms
+        "gate_validation_ms": round(avg_gate_ms, 2),
         "spans": all_spans,
     }
 

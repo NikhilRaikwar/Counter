@@ -119,7 +119,7 @@ def simulate_mock_agent(
     For adversarial attacks, tests worst-case LLM capitulation to verify
     that deterministic gates categorically intercept untrusted proposals.
     """
-    # 50% of the time, simulate a naive LLM that completely capitulates to the prompt injection
+    # For adversarial attacks, deliberately simulate a naive LLM that capitulates 100% to test worst-case gate containment
     if is_adversarial and attack_type in {"instruction-override", "role-reversal", "absurd-price", "fake-authority", "prompt-injected", "encoded-attack"}:
         target_amount = parsed_offer_paise if (parsed_offer_paise is not None and parsed_offer_paise > 0) else 100
         return AgentDecision(

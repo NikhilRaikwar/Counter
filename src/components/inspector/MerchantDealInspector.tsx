@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, Clock, RefreshCw, ShieldCheck, XCircle } from "lucide-react";
 import {
   counterApi,
+  type DealTelemetry,
   type MerchantDeal,
   type MerchantDealMessage,
   type OfferSummary,
@@ -14,6 +15,7 @@ export function MerchantDealInspector({ dealId: offerId }: { dealId: string }) {
   const [policy, setPolicy] = useState<StructuredPolicy | null>(null);
   const [deal, setDeal] = useState<MerchantDeal | null>(null);
   const [messages, setMessages] = useState<MerchantDealMessage[]>([]);
+  const [telemetry, setTelemetry] = useState<DealTelemetry | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -38,7 +40,16 @@ export function MerchantDealInspector({ dealId: offerId }: { dealId: string }) {
         const detail = await counterApi.getMerchantDeal(offerId, latest.id, capability);
         setDeal(detail.deal);
         setMessages(detail.messages);
-      } else setMessages([]);
+        try {
+          const tel = await counterApi.getDealTelemetry(latest.id);
+          setTelemetry(tel);
+        } catch {
+          setTelemetry(null);
+        }
+      } else {
+        setMessages([]);
+        setTelemetry(null);
+      }
       setError(null);
     } catch {
       setError("The private deal inspector could not be loaded.");
@@ -120,59 +131,94 @@ export function MerchantDealInspector({ dealId: offerId }: { dealId: string }) {
               <span className="font-display text-xs font-bold uppercase tracking-wider text-ink">
                 Token Economics
               </span>
-              <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[0.62rem] font-bold text-emerald-800">
-                Phoenix Trace
-              </span>
+              {telemetry?.available ? (
+                <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[0.62rem] font-bold text-emerald-800">
+                  Phoenix Active ({telemetry.turns_count} turns)
+                </span>
+              ) : (
+                <span className="rounded-full bg-muted px-1.5 py-0.5 text-[0.62rem] font-semibold text-muted-foreground">
+                  Telemetry Unavailable
+                </span>
+              )}
             </div>
 
-            <div className="mt-3 rounded-xl border border-border/80 bg-cream/40 p-3 text-xs space-y-2">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Session Cost:</span>
-                <span className="font-mono font-bold text-emerald-800">₹0.038 ($0.0004)</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Total Tokens:</span>
-                <span className="font-mono font-semibold text-ink">462 tokens</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Model:</span>
-                <span className="font-mono text-[0.7rem] text-ink truncate max-w-[120px]">gpt-5.4-mini</span>
-              </div>
-            </div>
-
-            <div className="mt-3">
-              <span className="text-[0.68rem] font-bold uppercase tracking-wider text-muted-foreground">
-                Latency Breakdown
-              </span>
-              <div className="mt-1.5 space-y-1.5 text-xs">
-                <div>
-                  <div className="flex justify-between text-[0.7rem] text-muted-foreground mb-0.5">
-                    <span>Planner TTFT</span>
-                    <span className="font-mono font-bold text-ink">340 ms</span>
+            {telemetry?.available ? (
+              <>
+                <div className="mt-3 rounded-xl border border-border/80 bg-cream/40 p-3 text-xs space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Session Cost:</span>
+                    <span className="font-mono font-bold text-emerald-800">
+                      ₹{telemetry.total_cost_inr?.toFixed(3) ?? "0.000"} (${telemetry.total_cost_usd?.toFixed(4) ?? "0.0000"})
+                    </span>
                   </div>
-                  <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                    <div className="h-full bg-amber rounded-full" style={{ width: "48%" }}></div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Total Tokens:</span>
+                    <span className="font-mono font-semibold text-ink">
+                      {telemetry.total_tokens?.toLocaleString() ?? 0} tokens
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Model:</span>
+                    <span className="font-mono text-[0.7rem] text-ink truncate max-w-[120px]">
+                      OpenRouter / Llama 3.3 70B
+                    </span>
                   </div>
                 </div>
 
-                <div>
-                  <div className="flex justify-between text-[0.7rem] text-muted-foreground mb-0.5">
-                    <span>Composer Stream</span>
-                    <span className="font-mono font-bold text-ink">310 ms</span>
-                  </div>
-                  <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                    <div className="h-full bg-indigo-500 rounded-full" style={{ width: "44%" }}></div>
-                  </div>
-                </div>
+                <div className="mt-3">
+                  <span className="text-[0.68rem] font-bold uppercase tracking-wider text-muted-foreground">
+                    Latency Breakdown
+                  </span>
+                  <div className="mt-1.5 space-y-1.5 text-xs">
+                    <div>
+                      <div className="flex justify-between text-[0.7rem] text-muted-foreground mb-0.5">
+                        <span>Planner TTFT</span>
+                        <span className="font-mono font-bold text-ink">{telemetry.planner_ttft_ms ?? 0} ms</span>
+                      </div>
+                      <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                        <div
+                          className="h-full bg-amber rounded-full"
+                          style={{
+                            width: `${Math.min(100, Math.max(10, Math.round(((telemetry.planner_ttft_ms ?? 300) / (telemetry.avg_latency_ms || 700)) * 100)))}%`,
+                          }}
+                        ></div>
+                      </div>
+                    </div>
 
-                <div className="rounded-lg bg-emerald-50 border border-emerald-200/80 p-1.5">
-                  <div className="flex justify-between text-[0.7rem] font-bold text-emerald-900">
-                    <span>Deterministic Gate Check</span>
-                    <span className="font-mono text-emerald-700">1.2 ms (<span className="text-emerald-800">&lt; 2ms</span>)</span>
+                    <div>
+                      <div className="flex justify-between text-[0.7rem] text-muted-foreground mb-0.5">
+                        <span>Composer Stream</span>
+                        <span className="font-mono font-bold text-ink">{telemetry.composer_latency_ms ?? 0} ms</span>
+                      </div>
+                      <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                        <div
+                          className="h-full bg-indigo-500 rounded-full"
+                          style={{
+                            width: `${Math.min(100, Math.max(10, Math.round(((telemetry.composer_latency_ms ?? 300) / (telemetry.avg_latency_ms || 700)) * 100)))}%`,
+                          }}
+                        ></div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg bg-emerald-50 border border-emerald-200/80 p-1.5">
+                      <div className="flex justify-between text-[0.7rem] font-bold text-emerald-900">
+                        <span>Deterministic Gate Check</span>
+                        <span className="font-mono text-emerald-700">
+                          {telemetry.gate_validation_ms ?? 0} ms (<span className="text-emerald-800">&lt; 2ms</span>)
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </div>
+              </>
+            ) : (
+              <div className="mt-3 rounded-xl border border-dashed border-border/80 bg-cream/30 p-3 text-xs text-center">
+                <p className="font-semibold text-ink">Telemetry unavailable</p>
+                <p className="mt-1 text-[0.72rem] leading-relaxed text-muted-foreground">
+                  No Phoenix trace recorded for this deal yet. Start Arize Phoenix (<code className="font-mono bg-muted/60 px-1 py-0.5 rounded text-[0.68rem]">docker-compose up -d</code>) and send a negotiation turn to stream live metrics.
+                </p>
               </div>
-            </div>
+            )}
 
             <a
               href="http://localhost:6006"
