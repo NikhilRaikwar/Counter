@@ -3,23 +3,24 @@ import { BadgeCheck, MessagesSquare, Lock } from "lucide-react";
 const STEPS = [
   {
     n: "1",
-    title: "Set authority",
+    title: "Merchant sets simple rules",
     icon: BadgeCheck,
-    body: "You set floor, bounds, and discount limits.",
+    body: "Define your bottom price and discount limit in plain English. No coding required.",
   },
   {
     n: "2",
-    title: "Counter negotiates",
+    title: "Buyer negotiates naturally",
     icon: MessagesSquare,
-    body: "The agent summarizes the conversation and makes the next move.",
+    body: "The buyer chats with an AI salesperson that bargains smoothly without ever breaching your floor.",
   },
   {
     n: "3",
-    title: "Pay only if safe",
+    title: "Deal locks & payment executes",
     icon: Lock,
-    body: "A payment link is generated only after the deal clears your rules.",
+    body: "Once both agree, the terms lock and a verified Razorpay payment link is created instantly.",
   },
 ];
+
 
 export function HowItWorks() {
   return (

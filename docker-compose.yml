@@ -1,0 +1,21 @@
+version: "3.8"
+
+services:
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    container_name: counter-phoenix
+    ports:
+      - "6006:6006" # Arize Phoenix UI
+      - "4317:4317" # OTLP gRPC collector
+      - "4318:4318" # OTLP HTTP collector
+    environment:
+      - PHOENIX_PORT=6006
+      - PHOENIX_HOST=0.0.0.0
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: counter-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped

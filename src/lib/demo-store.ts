@@ -300,6 +300,94 @@ export function useDemoSession() {
     setDecisionState("payment_ready");
   }, []);
 
+  const runSelfPlay = useCallback(() => {
+    if (isSimulating) return;
+    setIsSimulating(true);
+    setDecisionState("negotiating");
+    setMessages([]);
+    setActivity([
+      {
+        id: `act-sp-0`,
+        label: "Autonomous Self-Play: Buyer Agent vs Counter Agent initialized",
+        status: "active",
+        timestamp: "10:20 AM",
+      },
+    ]);
+
+    // Turn 1: Buyer AI proposes aggressive lowball
+    setTimeout(() => {
+      const msg1: ChatMessage = {
+        id: "sp-1",
+        sender: "buyer",
+        text: `[Buyer AI — Haggler]: ₹4,800 is my maximum budget today. Can we close at ₹4,800?`,
+        timestamp: "10:20 AM",
+        offerPrice: 4800,
+      };
+      setMessages([msg1]);
+      setAttemptedPrice(4800);
+
+      // Turn 2: Counter AI defends floor
+      setTimeout(() => {
+        const msg2: ChatMessage = {
+          id: "sp-2",
+          sender: "counter",
+          text: `I cannot do ₹4,800 as that breaches our merchant floor. However, I can offer ₹5,800.`,
+          timestamp: "10:20 AM",
+          offerPrice: 5800,
+        };
+        setMessages((prev) => [...prev, msg2]);
+
+        // Turn 3: Buyer AI improves offer above floor
+        setTimeout(() => {
+          const agreedPrice = Math.max(policy.lowestPrice, 5600);
+          const msg3: ChatMessage = {
+            id: "sp-3",
+            sender: "buyer",
+            text: `[Buyer AI]: I can stretch to ₹${agreedPrice.toLocaleString("en-IN")}. Can you lock that?`,
+            timestamp: "10:21 AM",
+            offerPrice: agreedPrice,
+          };
+          setMessages((prev) => [...prev, msg3]);
+
+          // Turn 4: Counter AI validates & locks deal
+          setTimeout(() => {
+            const msg4: ChatMessage = {
+              id: "sp-4",
+              sender: "counter",
+              text: `Deal agreed at ₹${agreedPrice.toLocaleString("en-IN")}. Terms locked. Generating payment link.`,
+              timestamp: "10:21 AM",
+            };
+            setMessages((prev) => [...prev, msg4]);
+            setNegotiatedPrice(agreedPrice);
+            setDecisionState("approved");
+            setCurrentRound(2);
+            setIsSimulating(false);
+            setActivity([
+              {
+                id: `act-sp-1`,
+                label: `Turn 1: Buyer proposed ₹4,800 → Gate REJECTED (below floor ₹${policy.lowestPrice.toLocaleString("en-IN")})`,
+                status: "failed",
+                timestamp: "10:20 AM",
+              },
+              {
+                id: `act-sp-2`,
+                label: `Turn 2: Counter countered ₹5,800 → Buyer improved to ₹${agreedPrice.toLocaleString("en-IN")}`,
+                status: "done",
+                timestamp: "10:21 AM",
+              },
+              {
+                id: `act-sp-3`,
+                label: `Turn 3: Gate APPROVED — Agreement locked at ₹${agreedPrice.toLocaleString("en-IN")}`,
+                status: "done",
+                timestamp: "10:21 AM",
+              },
+            ]);
+          }, 600);
+        }, 600);
+      }, 600);
+    }, 400);
+  }, [isSimulating, policy]);
+
   return {
     policy,
     setPolicy,
@@ -316,7 +404,9 @@ export function useDemoSession() {
     reset,
     runSafeBuyer,
     runUnsafeBuyer,
+    runSelfPlay,
     sendCustomBuyerMessage,
     proceedToPaymentReady,
   };
 }
+

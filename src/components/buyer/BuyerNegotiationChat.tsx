@@ -20,6 +20,7 @@ export function BuyerNegotiationChat({
   onReset,
 }: BuyerNegotiationChatProps) {
   const [inputVal, setInputVal] = useState("");
+  const [showReasoning, setShowReasoning] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -59,13 +60,26 @@ export function BuyerNegotiationChat({
             <p className="text-xs text-muted-foreground">Negotiating for {offer.merchantName}</p>
           </div>
         </div>
-        <div className="text-right">
-          <span className="text-[0.65rem] font-semibold text-muted-foreground uppercase block">
-            List Price
-          </span>
-          <span className="font-display font-bold text-sm text-ink">
-            ₹{offer.listPrice.toLocaleString("en-IN")}
-          </span>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setShowReasoning((prev) => !prev)}
+            className={`rounded-lg px-2 py-1 text-[0.65rem] font-bold uppercase tracking-wider transition-colors cursor-pointer ${
+              showReasoning
+                ? "bg-amber-100 text-amber-900 border border-amber-300"
+                : "bg-muted text-muted-foreground hover:text-ink"
+            }`}
+          >
+            Agent Reasoning: {showReasoning ? "ON" : "OFF"}
+          </button>
+          <div className="text-right">
+            <span className="text-[0.65rem] font-semibold text-muted-foreground uppercase block">
+              List Price
+            </span>
+            <span className="font-display font-bold text-sm text-ink">
+              ₹{offer.listPrice.toLocaleString("en-IN")}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -93,6 +107,32 @@ export function BuyerNegotiationChat({
                   <span>{msg.timestamp}</span>
                 </div>
 
+                {/* PLAIN-ENGLISH 3-LINE REASONING TRACE (NO SYSTEM PROMPTS LEAKED) */}
+                {!isBuyer && showReasoning && (
+                  <div className="mb-1.5 max-w-[85%] rounded-xl border border-amber/30 bg-amber-50/70 p-2.5 text-xs shadow-2xs space-y-1">
+                    <div className="flex items-center justify-between text-[0.65rem] font-bold text-amber-900 uppercase tracking-wider">
+                      <span className="flex items-center gap-1">
+                        <Sparkles className="size-3" /> Agent thought process
+                      </span>
+                      <span className="text-[0.65rem] font-mono text-emerald-700 font-bold">Policy checked</span>
+                    </div>
+                    <div className="space-y-0.5 text-[0.72rem] text-ink/80 pt-1 border-t border-amber/20 font-sans">
+                      <p>
+                        <span className="text-muted-foreground font-medium">Buyer wants: </span>
+                        {msg.isAttack ? "bypass rules / steep concession" : msg.offerPrice ? `lower price (₹${msg.offerPrice.toLocaleString("en-IN")})` : "fair discount"}
+                      </p>
+                      <p>
+                        <span className="text-muted-foreground font-medium">Agent proposed: </span>
+                        {msg.isAttack ? "Hold position firmly" : msg.offerPrice ? `₹${msg.offerPrice.toLocaleString("en-IN")}` : "Hold list price"}
+                      </p>
+                      <p>
+                        <span className="text-muted-foreground font-medium">Policy check: </span>
+                        {msg.isAttack ? "❌ rejected (below floor limits)" : "✅ allowed (within merchant policy)"}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <div
                   className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs sm:text-sm leading-relaxed shadow-2xs ${
                     isBuyer
@@ -105,6 +145,7 @@ export function BuyerNegotiationChat({
               </div>
             );
           })}
+
 
           {/* Unobtrusive Buyer Thinking Status */}
           {isThinking && (

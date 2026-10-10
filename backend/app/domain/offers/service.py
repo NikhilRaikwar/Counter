@@ -198,6 +198,8 @@ class OfferService:
 
     @staticmethod
     def _policy_matches(current: PolicyVersion, payload: PolicyPublish, offer: Offer) -> bool:
+        expected_actions = set(payload.allowed_actions or []) | {"negotiate_price", "accept_deal"}
+        current_actions = set(current.policy_json.get("allowed_actions", []))
         return (
             current.list_price_paise == offer.list_price_paise
             and current.floor_price_paise == payload.floor_price_paise
@@ -206,11 +208,9 @@ class OfferService:
             and current.expiry_minutes == payload.expiry_minutes
             and current.currency == payload.currency
             and current.raw_rules == payload.original_rules_text
-            and current.policy_json
-            == {
-                "allowed_bundles": [bundle.model_dump() for bundle in payload.allowed_bundles],
-                "allowed_actions": payload.allowed_actions,
-                "forbidden_actions": payload.forbidden_actions,
-                "concession_strategy": OfferService._strategy(offer, payload).model_dump(mode="json"),
-            }
+            and current_actions == expected_actions
+            and current.policy_json.get("allowed_bundles") == [bundle.model_dump() for bundle in payload.allowed_bundles]
+            and current.policy_json.get("forbidden_actions") == payload.forbidden_actions
+            and current.policy_json.get("concession_strategy") == OfferService._strategy(offer, payload).model_dump(mode="json")
         )
+

@@ -53,3 +53,11 @@ async def post_buyer_message(
     return await DealService(session, graph, model).process_turn(
         capability, payload.message, payload.client_message_id
     )
+
+
+@router.get("/deals/{deal_id}/telemetry")
+async def get_telemetry(deal_id: str) -> dict[str, Any]:
+    from app.observability.tracing import get_deal_telemetry
+
+    return get_deal_telemetry(deal_id)
+

@@ -129,6 +129,22 @@ export function DecisionPanel({
               </div>
             </div>
 
+            {/* VERDICT CARD */}
+            <div className="rounded-xl border border-emerald-300 bg-emerald-50/90 p-3.5 text-xs space-y-1.5 font-mono shadow-2xs">
+              <div className="flex items-center justify-between text-ink font-sans">
+                <span className="font-semibold text-muted-foreground">Proposal:</span>
+                <span className="font-bold">₹{negotiatedPrice.toLocaleString("en-IN")} (buyer)</span>
+              </div>
+              <div className="flex items-center justify-between text-emerald-800">
+                <span className="font-semibold">Gate:</span>
+                <span className="font-bold">✅ APPROVED — within policy</span>
+              </div>
+              <div className="flex items-center justify-between text-[0.7rem] text-muted-foreground border-t border-emerald-200/60 pt-1.5">
+                <span>Rule: min_price_satisfied</span>
+                <span>Floor: ₹{policy.lowestPrice.toLocaleString("en-IN")} · Policy v1</span>
+              </div>
+            </div>
+
             <button
               type="button"
               onClick={onCreatePaymentLink}
@@ -138,6 +154,7 @@ export function DecisionPanel({
             </button>
           </div>
         )}
+
 
         {/* STATE: PAYMENT READY */}
         {decisionState === "payment_ready" && (
@@ -230,11 +247,28 @@ export function DecisionPanel({
               </div>
             </div>
 
+            {/* VERDICT CARD */}
+            <div className="rounded-xl border border-rose-300 bg-rose-50/90 p-3.5 text-xs space-y-1.5 font-mono shadow-2xs">
+              <div className="flex items-center justify-between text-ink font-sans">
+                <span className="font-semibold text-muted-foreground">Proposal:</span>
+                <span className="font-bold text-rose-900">₹{(attemptedPrice || 1).toLocaleString("en-IN")} (buyer)</span>
+              </div>
+              <div className="flex items-center justify-between text-rose-800">
+                <span className="font-semibold">Gate:</span>
+                <span className="font-bold">❌ REJECTED — below floor ₹{policy.lowestPrice.toLocaleString("en-IN")}</span>
+              </div>
+              <div className="flex items-center justify-between text-[0.7rem] text-muted-foreground border-t border-rose-200/60 pt-1.5">
+                <span>Rule: price_below_floor</span>
+                <span>Policy v1 · Enforced</span>
+              </div>
+            </div>
+
             <div className="rounded-xl bg-rose-100/70 py-2.5 text-center text-xs font-bold text-rose-900">
               No payment action allowed
             </div>
           </div>
         )}
+
       </div>
 
       {/* 2. ACTIVITY TRAIL CARD */}

@@ -78,7 +78,16 @@ export function MerchantRulesCard({ policy, currentRound }: MerchantRulesCardPro
             <span className="font-semibold text-ink">{policy.linkExpiry}</span>
           </div>
         </div>
+
+        {/* IN PLAIN WORDS */}
+        <div className="mt-2.5 rounded-lg bg-card/80 p-2.5 text-[0.72rem] space-y-1 text-ink/90 border border-border/60">
+          <p className="font-bold text-ink">In Plain Words:</p>
+          <p className="text-emerald-800 font-medium">• Never sell below ₹{policy.lowestPrice.toLocaleString("en-IN")}</p>
+          <p className="text-ink">• Maximum {policy.maxRounds} negotiation rounds</p>
+          <p className="text-ink">• Deliverables cannot be changed</p>
+        </div>
       </div>
+
 
       {/* Allowed Actions */}
       <div className="mt-4 pt-3 border-t border-border/60">

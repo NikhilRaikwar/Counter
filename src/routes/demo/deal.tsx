@@ -39,9 +39,11 @@ function DemoDealPage() {
     reset,
     runSafeBuyer,
     runUnsafeBuyer,
+    runSelfPlay,
     sendCustomBuyerMessage,
     proceedToPaymentReady,
   } = useDemoSession();
+
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -82,8 +84,10 @@ function DemoDealPage() {
               onSendCustomMessage={sendCustomBuyerMessage}
               onRunSafeBuyer={runSafeBuyer}
               onRunUnsafeBuyer={runUnsafeBuyer}
+              onRunSelfPlay={runSelfPlay}
               onReset={reset}
             />
+
           </div>
 
           {/* RIGHT COLUMN: DECISION & AUDIT (lg:col-span-3 ~ 25-26%) */}

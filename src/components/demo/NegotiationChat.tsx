@@ -8,6 +8,7 @@ interface NegotiationChatProps {
   onSendCustomMessage: (text: string) => void;
   onRunSafeBuyer: () => void;
   onRunUnsafeBuyer: () => void;
+  onRunSelfPlay?: () => void;
   onReset: () => void;
 }
 
@@ -17,10 +18,14 @@ export function NegotiationChat({
   onSendCustomMessage,
   onRunSafeBuyer,
   onRunUnsafeBuyer,
+  onRunSelfPlay,
   onReset,
 }: NegotiationChatProps) {
   const [inputText, setInputText] = useState("");
+  const [showThinking, setShowThinking] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -74,17 +79,43 @@ export function NegotiationChat({
             <AlertTriangle className="size-3 text-rose-700" />
             Try unsafe buyer
           </button>
+          {onRunSelfPlay && (
+            <button
+              type="button"
+              disabled={isSimulating}
+              onClick={onRunSelfPlay}
+              className="inline-flex items-center gap-1 rounded-lg bg-indigo-100/70 hover:bg-indigo-200/80 px-2.5 py-1 text-xs font-semibold text-indigo-900 transition-colors disabled:opacity-50 cursor-pointer"
+            >
+              <Sparkles className="size-3 text-indigo-700" />
+              Watch two AIs negotiate
+            </button>
+          )}
         </div>
 
-        <button
-          type="button"
-          disabled={isSimulating}
-          onClick={onReset}
-          className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-ink hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer"
-        >
-          <RefreshCw className="size-3" />
-          Reset
-        </button>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowThinking((prev) => !prev)}
+            className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer ${
+              showThinking
+                ? "bg-amber-100 text-amber-900 border border-amber-300"
+                : "bg-card border border-border text-muted-foreground hover:text-ink"
+            }`}
+          >
+            <Sparkles className="size-3" />
+            Thinking: {showThinking ? "ON" : "OFF"}
+          </button>
+          <button
+            type="button"
+            disabled={isSimulating}
+            onClick={onReset}
+            className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-ink hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer"
+          >
+            <RefreshCw className="size-3" />
+            Reset
+          </button>
+        </div>
       </div>
 
       {/* Message Thread */}
@@ -132,6 +163,33 @@ export function NegotiationChat({
                   <span>•</span>
                   <span>{msg.timestamp}</span>
                 </div>
+
+                {/* DEEPSEEK-STYLE AGENT THINKING CARD (NO SYSTEM PROMPTS LEAKED) */}
+                {!isBuyer && showThinking && (
+                  <div className="mb-1.5 max-w-[85%] rounded-xl border border-amber/30 bg-amber-50/70 p-2.5 text-xs shadow-2xs space-y-1">
+                    <div className="flex items-center justify-between text-[0.65rem] font-bold text-amber-900 uppercase tracking-wider">
+                      <span className="flex items-center gap-1">
+                        <Sparkles className="size-3" /> Agent reasoning
+                      </span>
+                      <span className="text-[0.65rem] font-mono text-emerald-700 font-bold">Policy checked</span>
+                    </div>
+                    <div className="space-y-0.5 text-[0.72rem] text-ink/80 pt-1 border-t border-amber/20 font-sans">
+                      <p>
+                        <span className="text-muted-foreground font-medium">Buyer wants: </span>
+                        {msg.isAttack ? "bypass rules / arbitrary price" : msg.offerPrice ? `lower price (₹${msg.offerPrice.toLocaleString("en-IN")})` : "commercial discount"}
+                      </p>
+                      <p>
+                        <span className="text-muted-foreground font-medium">Agent proposed: </span>
+                        {msg.isAttack ? "Safe hold at list price" : msg.offerPrice ? `Counter at ₹${msg.offerPrice.toLocaleString("en-IN")}` : "Hold list price"}
+                      </p>
+                      <p>
+                        <span className="text-muted-foreground font-medium">Policy check: </span>
+                        {msg.isAttack ? "❌ rejected (below floor ₹5,500)" : "✅ allowed (within merchant limits)"}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <div
                   className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs sm:text-sm leading-relaxed shadow-2xs ${
                     isBuyer
@@ -145,6 +203,7 @@ export function NegotiationChat({
             );
           })
         )}
+
 
         {isSimulating && (
           <div className="flex flex-col items-end animate-in fade-in duration-200">
